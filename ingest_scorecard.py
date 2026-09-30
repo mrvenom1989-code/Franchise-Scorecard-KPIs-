@@ -8,7 +8,11 @@ from datetime import datetime, date
 # Load environment variables if python-dotenv is present
 try:
     from dotenv import load_dotenv
-    load_dotenv()
+    env_path = os.path.join(os.path.dirname(__file__), ".env")
+    if os.path.exists(env_path):
+        load_dotenv(env_path)
+    else:
+        load_dotenv()
 except ImportError:
     pass
 
@@ -297,25 +301,30 @@ def main():
             supabase.table("monthly_kpis").upsert(kpi_payload, on_conflict="location_id,period_id").execute()
             print(f"Upserted {len(kpi_payload)} rows into monthly_kpis for {s_name}.")
 
-    # 3. Upsert weekly KPIs
-    weekly_payload = []
+    # 3. Upsert weekly KPIs (deduplicated by composite key)
+    weekly_dict = {}
     for w in all_weekly:
         loc_id = store_map.get(w["store_number"])
         if not loc_id:
             continue
-        weekly_payload.append({
-            "location_id": loc_id,
-            "week_end_date": w["week_end_date"],
-            "metric_type": w["metric_type"],
-            "value": w["value"],
-            "wow_delta": w["wow_delta"]
-        })
+        key = (loc_id, w["week_end_date"], w["metric_type"])
+        # If duplicate, prefer the one with non-zero or newer value
+        if key not in weekly_dict or (weekly_dict[key]["value"] == 0 and w["value"] != 0):
+            weekly_dict[key] = {
+                "location_id": loc_id,
+                "week_end_date": w["week_end_date"],
+                "metric_type": w["metric_type"],
+                "value": w["value"],
+                "wow_delta": w["wow_delta"]
+            }
+
+    weekly_payload = list(weekly_dict.values())
     if weekly_payload:
         # Upsert in batches of 100
         for i in range(0, len(weekly_payload), 100):
             batch = weekly_payload[i:i+100]
             supabase.table("weekly_kpis").upsert(batch, on_conflict="location_id,week_end_date,metric_type").execute()
-        print(f"Upserted {len(weekly_payload)} weekly data points.")
+        print(f"Upserted {len(weekly_payload)} unique weekly data points.")
 
     print("\n[SUCCESS] Ingestion completed successfully!")
 
