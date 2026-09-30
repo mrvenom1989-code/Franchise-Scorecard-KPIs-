@@ -72,10 +72,29 @@ def parse_monthly_sheet(ws, sheet_name):
         metric = str(metric_row[idx]).strip() if metric_row[idx] is not None else f"col_{idx}"
         col_headers[idx] = f"{curr_cat}::{curr_sub}::{metric}".lower()
 
-    # Determine period start/end dates
-    # Read row 2 and 3 for dates if present
-    period_start = date(2026, 1, 1)
-    period_end = date(2026, 1, 18)
+    # Determine period start/end dates from rows 2 and 3
+    r2 = list(ws.iter_rows(min_row=2, max_row=2, values_only=True))[0]
+    r3 = list(ws.iter_rows(min_row=3, max_row=3, values_only=True))[0]
+    
+    period_start = None
+    for cell in r2:
+        if isinstance(cell, (datetime, date)):
+            period_start = cell.date() if isinstance(cell, datetime) else cell
+            break
+            
+    period_end = None
+    for cell in r3:
+        if isinstance(cell, (datetime, date)):
+            period_end = cell.date() if isinstance(cell, datetime) else cell
+            break
+            
+    if not period_start:
+        period_start = date(2026, 1, 1)
+    if not period_end:
+        import calendar
+        last_day = calendar.monthrange(period_start.year, period_start.month)[1]
+        period_end = date(period_start.year, period_start.month, last_day)
+
     period_type = "MTD" if "MTD" in sheet_name.upper() else "FULL_MONTH"
 
     rows = []
@@ -163,7 +182,7 @@ def parse_monthly_sheet(ws, sheet_name):
 
         rows.append(record)
 
-    return rows
+    return rows, period_start, period_end, period_type
 
 def parse_wow_sheet(ws, sheet_name, metric_type):
     """Parses a weekly tracker sheet (e.g. WOW Activation, WOW CPO Volume)."""
@@ -229,9 +248,14 @@ def main():
     for s_name in monthly_sheets:
         if s_name in wb.sheetnames:
             print(f"Parsing monthly sheet: {s_name}...")
-            records = parse_monthly_sheet(wb[s_name], s_name)
-            all_monthly[s_name] = records
-            print(f"  > Extracted {len(records)} store records.")
+            records, p_start, p_end, p_type = parse_monthly_sheet(wb[s_name], s_name)
+            all_monthly[s_name] = {
+                "records": records,
+                "start_date": p_start,
+                "end_date": p_end,
+                "period_type": p_type
+            }
+            print(f"  > Extracted {len(records)} store records ({p_start} to {p_end}).")
 
     all_weekly = []
     wow_map = {
@@ -248,13 +272,13 @@ def main():
             print(f"  > Extracted {len(w_records)} weekly points.")
 
     print("\n==================== INGESTION SUMMARY ====================")
-    total_m_records = sum(len(v) for v in all_monthly.values())
+    total_m_records = sum(len(v["records"]) for v in all_monthly.values())
     print(f"Total Monthly Store Records Extracted: {total_m_records}")
     print(f"Total Weekly Data Points Extracted:    {len(all_weekly)}")
 
     # Sample output
-    if "Jan 26 MTD" in all_monthly and all_monthly["Jan 26 MTD"]:
-        sample = all_monthly["Jan 26 MTD"][0]
+    if "Jan 26 MTD" in all_monthly and all_monthly["Jan 26 MTD"]["records"]:
+        sample = all_monthly["Jan 26 MTD"]["records"][0]
         print(f"\nSample Store Record (Store {sample['store_number']} - {sample['store_name']}):")
         print(json.dumps(sample["kpis"], indent=2))
 
@@ -275,14 +299,13 @@ def main():
     print(f"Mapped {len(store_map)} locations in Supabase.")
 
     # 2. Upsert periods and monthly KPIs
-    for s_name, records in all_monthly.items():
-        # Get or create period
-        p_type = "MTD" if "MTD" in s_name.upper() else "FULL_MONTH"
+    for s_name, p_info in all_monthly.items():
+        records = p_info["records"]
         p_resp = supabase.table("scorecard_periods").upsert({
             "label": s_name.strip(),
-            "start_date": "2026-01-01" if "Jan" in s_name else "2025-12-01",
-            "end_date": "2026-01-18" if "Jan" in s_name else "2025-12-31",
-            "period_type": p_type
+            "start_date": str(p_info["start_date"]),
+            "end_date": str(p_info["end_date"]),
+            "period_type": p_info["period_type"]
         }, on_conflict="label").execute()
         period_id = p_resp.data[0]["id"]
 
