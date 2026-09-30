@@ -125,7 +125,7 @@
         </div>
         <div>
           <label style="display:block;font-size:0.78rem;font-weight:600;color:var(--text-muted);margin-bottom:6px;">Role</label>
-          <select name="role" class="select-control" style="width: 100%;">
+          <select name="role" id="create-role" class="select-control" style="width: 100%;" onchange="toggleCreateStoresVisibility(this.value)">
             {% if current_user.role == 'super_admin' %}
             <option value="admin">🏢 Admin (Franchise Owner - Multi Store)</option>
             <option value="super_admin">👑 Super Administrator</option>
@@ -148,13 +148,28 @@
         </div>
       </div>
 
-      <!-- Store Assignment Multi-Select Checkboxes -->
-      <div style="margin-bottom: 20px;">
-        <label style="display:block;font-size:0.78rem;font-weight:600;color:var(--text-muted);margin-bottom:6px;">Assign Store Locations</label>
-        <div class="param-chips-grid" style="max-height: 200px;">
+      <!-- Super Admin Global Access Banner -->
+      <div id="create-super-admin-banner" style="display: none; margin-bottom: 20px; padding: 12px 14px; background: rgba(99, 102, 241, 0.12); border: 1px solid var(--accent-indigo); border-radius: var(--radius-md); font-size: 0.82rem; color: #c7d2fe;">
+        <i data-feather="info" style="width: 14px; height: 14px; vertical-align: middle; margin-right: 4px;"></i>
+        Super Administrators automatically receive full access to all network locations. Individual store assignment is not required.
+      </div>
+
+      <!-- Store Assignment Multi-Select Checkboxes with Search Filter -->
+      <div style="margin-bottom: 20px;" id="create-stores-section">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+          <label style="font-size:0.78rem;font-weight:600;color:var(--text-muted);">Assign Store Locations</label>
+          <div style="display:flex; gap:6px;">
+            <button type="button" class="btn btn-secondary" style="font-size:0.7rem;padding:2px 8px;" onclick="setAllCreateStoreCheckboxes(true)">All</button>
+            <button type="button" class="btn btn-secondary" style="font-size:0.7rem;padding:2px 8px;" onclick="setAllCreateStoreCheckboxes(false)">Clear</button>
+          </div>
+        </div>
+
+        <input type="text" id="create-store-search" placeholder="Search stores by number or name (e.g. 333 or Country Hills)..." class="select-control" style="width: 100%; font-size: 0.82rem; padding: 7px 12px; margin-bottom: 10px;" oninput="filterCreateStoreChips()">
+
+        <div class="param-chips-grid" style="max-height: 200px;" id="create-store-chips-container">
           {% for loc in assignable_locations %}
-          <label class="param-chip">
-            <input type="checkbox" name="stores" value="{{ loc.store_number }}">
+          <label class="param-chip create-store-chip" data-search="{{ loc.store_number }} {{ loc.name.lower() }} {{ loc.region.lower() }}">
+            <input type="checkbox" name="stores" value="{{ loc.store_number }}" class="create-store-cb">
             #{{ loc.store_number }} {{ loc.name.replace('Mobile Klinik ', '') }}
           </label>
           {% endfor %}
@@ -226,18 +241,21 @@
         Super Administrators automatically receive full access to all network locations. Individual store assignment is not required.
       </div>
 
-      <!-- Store Assignment Multi-Select Checkboxes -->
+      <!-- Store Assignment Multi-Select Checkboxes with Search Filter -->
       <div style="margin-bottom: 20px;" id="edit-stores-section">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
           <label style="font-size:0.78rem;font-weight:600;color:var(--text-muted);">Assign Store Locations</label>
           <div style="display:flex; gap:6px;">
             <button type="button" class="btn btn-secondary" style="font-size:0.7rem;padding:2px 8px;" onclick="setAllEditStoreCheckboxes(true)">All</button>
             <button type="button" class="btn btn-secondary" style="font-size:0.7rem;padding:2px 8px;" onclick="setAllEditStoreCheckboxes(false)">Clear</button>
           </div>
         </div>
-        <div class="param-chips-grid" style="max-height: 200px;">
+
+        <input type="text" id="edit-store-search" placeholder="Search stores by number or name (e.g. 333 or Country Hills)..." class="select-control" style="width: 100%; font-size: 0.82rem; padding: 7px 12px; margin-bottom: 10px;" oninput="filterEditStoreChips()">
+
+        <div class="param-chips-grid" style="max-height: 200px;" id="edit-store-chips-container">
           {% for loc in assignable_locations %}
-          <label class="param-chip edit-store-chip" data-store-num="{{ loc.store_number }}">
+          <label class="param-chip edit-store-chip" data-store-num="{{ loc.store_number }}" data-search="{{ loc.store_number }} {{ loc.name.lower() }} {{ loc.region.lower() }}">
             <input type="checkbox" name="stores" value="{{ loc.store_number }}" class="edit-store-cb">
             #{{ loc.store_number }} {{ loc.name.replace('Mobile Klinik ', '') }}
           </label>
@@ -257,13 +275,59 @@
 {% block scripts %}
 <script>
   function openCreateUserModal() {
+    const searchInput = document.getElementById('create-store-search');
+    if (searchInput) {
+      searchInput.value = '';
+      filterCreateStoreChips();
+    }
+    const roleSelect = document.getElementById('create-role');
+    if (roleSelect) {
+      toggleCreateStoresVisibility(roleSelect.value);
+    }
     document.getElementById('create-user-modal').classList.add('active');
+    if (window.feather) feather.replace();
   }
+
   function closeCreateUserModal() {
     document.getElementById('create-user-modal').classList.remove('active');
   }
 
+  function toggleCreateStoresVisibility(role) {
+    const sec = document.getElementById('create-stores-section');
+    const banner = document.getElementById('create-super-admin-banner');
+    if (role === 'super_admin') {
+      if (sec) sec.style.display = 'none';
+      if (banner) banner.style.display = 'block';
+    } else {
+      if (sec) sec.style.display = 'block';
+      if (banner) banner.style.display = 'none';
+    }
+  }
+
+  function filterCreateStoreChips() {
+    const q = (document.getElementById('create-store-search').value || '').toLowerCase().trim();
+    document.querySelectorAll('.create-store-chip').forEach(chip => {
+      const searchData = chip.dataset.search || '';
+      chip.style.display = searchData.includes(q) ? 'flex' : 'none';
+    });
+  }
+
+  function setAllCreateStoreCheckboxes(checked) {
+    document.querySelectorAll('.create-store-cb').forEach(cb => {
+      const chip = cb.closest('.create-store-chip');
+      if (!chip || chip.style.display !== 'none') {
+        cb.checked = checked;
+      }
+    });
+  }
+
   function openEditUserModal(btn) {
+    const searchInput = document.getElementById('edit-store-search');
+    if (searchInput) {
+      searchInput.value = '';
+      filterEditStoreChips();
+    }
+
     const userId = btn.dataset.userId;
     const fullName = btn.dataset.fullName;
     const email = btn.dataset.email;
@@ -305,9 +369,20 @@
     }
   }
 
+  function filterEditStoreChips() {
+    const q = (document.getElementById('edit-store-search').value || '').toLowerCase().trim();
+    document.querySelectorAll('.edit-store-chip').forEach(chip => {
+      const searchData = chip.dataset.search || '';
+      chip.style.display = searchData.includes(q) ? 'flex' : 'none';
+    });
+  }
+
   function setAllEditStoreCheckboxes(checked) {
     document.querySelectorAll('.edit-store-cb').forEach(cb => {
-      cb.checked = checked;
+      const chip = cb.closest('.edit-store-chip');
+      if (!chip || chip.style.display !== 'none') {
+        cb.checked = checked;
+      }
     });
   }
 </script>
