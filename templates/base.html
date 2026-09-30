@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Operations Dashboard{% endblock %} | Mobile Klinik</title>
+  
+  <!-- Google Fonts: Inter & Outfit -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- Feather Icons -->
+  <script src="https://cdn.jsdelivr.net/npm/feather-icons/dist/feather.min.js"></script>
+  
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  
+  <!-- App Stylesheet -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  {% block extra_head %}{% endblock %}
+</head>
+<body>
+
+  {% if session.get('user') %}
+  <!-- Top Navigation -->
+  <header class="navbar glass">
+    <a href="{{ url_for('dashboard.index') }}" class="brand">
+      <div class="brand-badge">MK</div>
+      <div class="brand-text">
+        <h1>Mobile Klinik</h1>
+        <span>Franchise Scorecard</span>
+      </div>
+    </a>
+
+    <div class="nav-actions">
+      {% if session.user.role in ['super_admin', 'admin'] %}
+      <a href="{{ url_for('admin.user_management') }}" class="btn btn-secondary" title="Manage Users & Scorecards">
+        <i data-feather="users"></i> User Admin
+      </a>
+      {% endif %}
+
+      <div class="user-badge glass">
+        <i data-feather="user" style="width: 14px; height: 14px; color: var(--accent-cyan);"></i>
+        <span style="font-weight: 600;">{{ session.user.full_name }}</span>
+        <span class="role-pill role-{{ session.user.role }}">{{ session.user.role.replace('_', ' ') }}</span>
+      </div>
+
+      <a href="{{ url_for('auth.logout') }}" class="btn btn-secondary" style="padding: 6px 12px;" title="Logout">
+        <i data-feather="log-out"></i>
+      </a>
+    </div>
+  </header>
+  {% endif %}
+
+  <!-- Flash Messages -->
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      {% for category, message in messages %}
+        <div class="alert alert-{{ category }}">
+          <span>{{ message }}</span>
+          <button onclick="this.parentElement.remove()" style="background:none;border:none;color:inherit;cursor:pointer;">&times;</button>
+        </div>
+      {% endfor %}
+    {% endif %}
+  {% endwith %}
+
+  <!-- Main Body Content -->
+  <main style="display: flex; flex-direction: column; flex: 1;">
+    {% block content %}{% endblock %}
+  </main>
+
+  <script>
+    document.addEventListener("DOMContentLoaded", function() {
+      if (window.feather) {
+        feather.replace();
+      }
+    });
+  </script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

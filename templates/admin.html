@@ -1,0 +1,165 @@
+{% extends 'base.html' %}
+
+{% block title %}User & Store Administration{% endblock %}
+
+{% block content %}
+<div class="dashboard-content" style="max-width: 1200px; margin: 0 auto; width: 100%;">
+  
+  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+    <div>
+      <h2 style="font-family: var(--font-heading); font-size: 1.5rem; font-weight: 700;">Platform Administration</h2>
+      <p style="color: var(--text-muted); font-size: 0.85rem;">Manage team member roles, store access permissions, and data uploads</p>
+    </div>
+    <div style="display: flex; gap: 10px;">
+      <a href="{{ url_for('dashboard.index') }}" class="btn btn-secondary">
+        <i data-feather="arrow-left"></i> Back to Dashboard
+      </a>
+      <button class="btn btn-primary" onclick="openCreateUserModal()">
+        <i data-feather="user-plus"></i> Provision New User
+      </button>
+    </div>
+  </div>
+
+  {% if current_user.role == 'super_admin' %}
+  <!-- Scorecard Upload Card (Super Admin Only) -->
+  <div class="glass-card" style="margin-bottom: 24px;">
+    <div class="chart-header">
+      <div>
+        <h3 class="chart-title">Upload New Scorecard (.xlsx)</h3>
+        <p style="color: var(--text-dim); font-size: 0.82rem;">Upload the latest weekly or monthly Mobile Klinik Excel scorecard. Data is normalized and updated in-place.</p>
+      </div>
+      <i data-feather="upload-cloud" style="color: var(--accent-indigo);"></i>
+    </div>
+    <form action="{{ url_for('admin.upload_scorecard') }}" method="POST" enctype="multipart/form-data" style="display: flex; gap: 12px; align-items: center; margin-top: 14px;">
+      <input type="file" name="file" accept=".xlsx,.xls" required class="select-control" style="flex: 1;">
+      <button type="submit" class="btn btn-primary">
+        <i data-feather="check"></i> Ingest & Process Scorecard
+      </button>
+    </form>
+  </div>
+  {% endif %}
+
+  <!-- Users List Table -->
+  <div class="glass-card table-card">
+    <div class="chart-header">
+      <h3 class="chart-title">Active Team Members</h3>
+      <span style="font-size: 0.78rem; color: var(--text-dim);">Showing {{ users|length }} user(s)</span>
+    </div>
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Full Name</th>
+          <th>Email Address</th>
+          <th>Role</th>
+          <th>Organization</th>
+          <th>Assigned Stores</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for u in users %}
+        <tr>
+          <td><strong>{{ u.full_name }}</strong></td>
+          <td>{{ u.email }}</td>
+          <td><span class="role-pill role-{{ u.role }}">{{ u.role.replace('_', ' ') }}</span></td>
+          <td>{{ u.organization_name or 'Mobile Klinik' }}</td>
+          <td>
+            {% if u.role == 'super_admin' %}
+              <span style="color: var(--accent-cyan); font-weight: 600;">All Network Locations (40)</span>
+            {% else %}
+              {% set locs = u.user_location_access or [] %}
+              {% if locs|length > 0 %}
+                {% for acc in locs %}
+                  <span class="role-pill" style="background: rgba(255,255,255,0.05); margin-right: 4px; display: inline-block; margin-bottom: 2px;">
+                    #{{ acc.locations.store_number }} {{ acc.locations.name.replace('Mobile Klinik ', '') }}
+                  </span>
+                {% endfor %}
+              {% else %}
+                <span style="color: var(--text-dim); font-size: 0.78rem;">No stores assigned</span>
+              {% endif %}
+            {% endif %}
+          </td>
+          <td>
+            <span class="delta-badge {{ 'delta-positive' if u.is_active else 'delta-negative' }}">
+              {{ 'Active' if u.is_active else 'Inactive' }}
+            </span>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+</div>
+
+<!-- Create User Modal -->
+<div id="create-user-modal" class="modal-overlay">
+  <div class="modal-content" style="max-width: 580px;">
+    <div class="modal-header">
+      <h3 class="modal-title">Provision New Team Member</h3>
+      <button onclick="closeCreateUserModal()" style="background:none;border:none;color:var(--text-muted);font-size:1.4rem;cursor:pointer;">&times;</button>
+    </div>
+    
+    <form action="{{ url_for('admin.create_user_route') }}" method="POST">
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px;">
+        <div>
+          <label style="display:block;font-size:0.78rem;font-weight:600;color:var(--text-muted);margin-bottom:6px;">Full Name</label>
+          <input type="text" name="full_name" required placeholder="John Doe" class="select-control" style="width: 100%;">
+        </div>
+        <div>
+          <label style="display:block;font-size:0.78rem;font-weight:600;color:var(--text-muted);margin-bottom:6px;">Role</label>
+          <select name="role" class="select-control" style="width: 100%;">
+            {% if current_user.role == 'super_admin' %}
+            <option value="admin">🏢 Admin (Franchise Owner - Multi Store)</option>
+            <option value="super_admin">👑 Super Administrator</option>
+            {% endif %}
+            <option value="store_manager" selected>🏬 Store Manager</option>
+            <option value="accountant">💼 Accountant (Read-Only)</option>
+            <option value="staff">🔧 Frontline Staff (Financial Masked)</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px;">
+        <div>
+          <label style="display:block;font-size:0.78rem;font-weight:600;color:var(--text-muted);margin-bottom:6px;">Email Address</label>
+          <input type="email" name="email" required placeholder="manager@mobileklinik.ca" class="select-control" style="width: 100%;">
+        </div>
+        <div>
+          <label style="display:block;font-size:0.78rem;font-weight:600;color:var(--text-muted);margin-bottom:6px;">Initial Password</label>
+          <input type="password" name="password" required placeholder="••••••••••••" class="select-control" style="width: 100%;">
+        </div>
+      </div>
+
+      <!-- Store Assignment Multi-Select Checkboxes -->
+      <div style="margin-bottom: 20px;">
+        <label style="display:block;font-size:0.78rem;font-weight:600;color:var(--text-muted);margin-bottom:6px;">Assign Store Locations</label>
+        <div class="param-chips-grid" style="max-height: 200px;">
+          {% for loc in assignable_locations %}
+          <label class="param-chip">
+            <input type="checkbox" name="stores" value="{{ loc.store_number }}">
+            #{{ loc.store_number }} {{ loc.name.replace('Mobile Klinik ', '') }}
+          </label>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div style="display: flex; justify-content: flex-end; gap: 10px;">
+        <button type="button" class="btn btn-secondary" onclick="closeCreateUserModal()">Cancel</button>
+        <button type="submit" class="btn btn-primary">Create User Account</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  function openCreateUserModal() {
+    document.getElementById('create-user-modal').classList.add('active');
+  }
+  function closeCreateUserModal() {
+    document.getElementById('create-user-modal').classList.remove('active');
+  }
+</script>
+{% endblock %}

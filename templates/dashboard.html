@@ -1,0 +1,446 @@
+{% extends 'base.html' %}
+
+{% block title %}Operations Dashboard{% endblock %}
+
+{% block content %}
+<!-- Global Filter Control Bar -->
+<section class="control-bar glass">
+  <div class="filter-group">
+    <!-- Store / Location Selector -->
+    <div style="display: flex; align-items: center; gap: 8px;">
+      <i data-feather="map-pin" style="width: 16px; height: 16px; color: var(--accent-indigo);"></i>
+      {% if locations|length > 1 or session.user.role == 'super_admin' %}
+      <select id="location-select" class="select-control" onchange="loadDashboardData()">
+        <option value="all">🏢 All Accessible Locations (Consolidated Portfolio)</option>
+        {% for loc in locations %}
+        <option value="{{ loc.id }}">Store #{{ loc.store_number }} — {{ loc.name }} ({{ loc.region }})</option>
+        {% endfor %}
+      </select>
+      {% else %}
+      <div class="glass" style="padding: 8px 14px; border-radius: var(--radius-md); font-size: 0.85rem; font-weight: 600;">
+        Store #{{ locations[0].store_number }} — {{ locations[0].name }}
+      </div>
+      <input type="hidden" id="location-select" value="{{ locations[0].id }}">
+      {% endif %}
+    </div>
+
+    <!-- Time Period Selector -->
+    <div style="display: flex; align-items: center; gap: 8px;">
+      <i data-feather="calendar" style="width: 16px; height: 16px; color: var(--accent-cyan);"></i>
+      <select id="period-select" class="select-control" onchange="loadDashboardData()">
+        {% for p in periods %}
+        <option value="{{ p.id }}">{{ p.label }} ({{ p.period_type }})</option>
+        {% endfor %}
+      </select>
+    </div>
+  </div>
+
+  <div class="filter-group">
+    <!-- Customize KPIs Toggle Drawer Button -->
+    <button class="btn btn-secondary" onclick="openParamModal()">
+      <i data-feather="sliders"></i> Customize KPIs
+    </button>
+
+    <!-- CSV Export Button -->
+    <button class="btn btn-primary" onclick="exportData()">
+      <i data-feather="download"></i> Export Data
+    </button>
+  </div>
+</section>
+
+<!-- Tabbed Navigation Bar -->
+<nav class="tabs-nav glass">
+  <button class="tab-btn active" data-tab="tab-executive" onclick="switchTab('tab-executive')">
+    <i data-feather="activity"></i> Executive Pulse
+  </button>
+  <button class="tab-btn" data-tab="tab-activations" onclick="switchTab('tab-activations')">
+    <i data-feather="smartphone"></i> Carrier Activations
+  </button>
+  <button class="tab-btn" data-tab="tab-cpo" onclick="switchTab('tab-cpo')">
+    <i data-feather="box"></i> Hardware & CPO
+  </button>
+  <button class="tab-btn" data-tab="tab-repairs" onclick="switchTab('tab-repairs')">
+    <i data-feather="tool"></i> Technical & Repairs
+  </button>
+  <button class="tab-btn" data-tab="tab-accessories" onclick="switchTab('tab-accessories')">
+    <i data-feather="shopping-bag"></i> Accessories & Bundles
+  </button>
+  <button class="tab-btn" data-tab="tab-traffic" onclick="switchTab('tab-traffic')">
+    <i data-feather="users"></i> Traffic & Funnel
+  </button>
+  <button class="tab-btn" data-tab="tab-benchmark" onclick="switchTab('tab-benchmark')">
+    <i data-feather="bar-chart-2"></i> Benchmarks & Ranking
+  </button>
+</nav>
+
+<!-- Main Tabbed Dashboard Content -->
+<div class="dashboard-content">
+
+  <!-- ==================== TAB 1: EXECUTIVE PULSE ==================== -->
+  <div id="tab-executive" class="tab-panel active">
+    <!-- Summary KPI Cards -->
+    <div class="kpi-grid">
+      <div class="glass-card kpi-card" data-kpi="revenue" style="--card-accent: var(--accent-indigo);">
+        <div class="kpi-header">
+          <span class="kpi-title">Gross Revenue</span>
+          <div class="kpi-icon"><i data-feather="dollar-sign"></i></div>
+        </div>
+        <div class="kpi-value" id="kpi-gross-revenue">$0</div>
+        <div class="kpi-subtext">
+          <span>Projected: <strong id="kpi-projected-revenue">$0</strong></span>
+        </div>
+      </div>
+
+      <div class="glass-card kpi-card" data-kpi="volume" style="--card-accent: var(--accent-cyan);">
+        <div class="kpi-header">
+          <span class="kpi-title">Total Sales Volume</span>
+          <div class="kpi-icon"><i data-feather="shopping-cart"></i></div>
+        </div>
+        <div class="kpi-value" id="kpi-sales-volume">0</div>
+        <div class="kpi-subtext">
+          <span>ASP: <strong id="kpi-asp">$0</strong></span>
+        </div>
+      </div>
+
+      <div class="glass-card kpi-card" data-kpi="activations" style="--card-accent: var(--accent-purple);">
+        <div class="kpi-header">
+          <span class="kpi-title">Total Activations</span>
+          <div class="kpi-icon"><i data-feather="radio"></i></div>
+        </div>
+        <div class="kpi-value" id="kpi-activations">0</div>
+        <div class="kpi-subtext">
+          <span>New: <strong id="kpi-activations-new">0</strong> | Renew: <strong id="kpi-activations-renewals">0</strong></span>
+        </div>
+      </div>
+
+      <div class="glass-card kpi-card" data-kpi="cpo" style="--card-accent: var(--accent-emerald);">
+        <div class="kpi-header">
+          <span class="kpi-title">CPO Units Sold</span>
+          <div class="kpi-icon"><i data-feather="box"></i></div>
+        </div>
+        <div class="kpi-value" id="kpi-cpo-units">0</div>
+        <div class="kpi-subtext">
+          <span>CPO Revenue: <strong id="kpi-cpo-revenue">$0</strong></span>
+        </div>
+      </div>
+
+      <div class="glass-card kpi-card" data-kpi="repairs" style="--card-accent: var(--accent-amber);">
+        <div class="kpi-header">
+          <span class="kpi-title">Total Repairs</span>
+          <div class="kpi-icon"><i data-feather="tool"></i></div>
+        </div>
+        <div class="kpi-value" id="kpi-repairs-total">0</div>
+        <div class="kpi-subtext">
+          <span>OOW: <strong id="kpi-repairs-oow">0</strong> | Ins: <strong id="kpi-repairs-ins">0</strong></span>
+        </div>
+      </div>
+
+      <div class="glass-card kpi-card" data-kpi="conversion" style="--card-accent: var(--accent-rose);">
+        <div class="kpi-header">
+          <span class="kpi-title">Conversion Rate</span>
+          <div class="kpi-icon"><i data-feather="percent"></i></div>
+        </div>
+        <div class="kpi-value" id="kpi-conversion-rate">0%</div>
+        <div class="kpi-subtext">
+          <span>Traffic: <strong id="kpi-traffic-count">0</strong></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Charts Row -->
+    <div class="charts-grid">
+      <div class="glass-card">
+        <div class="chart-header">
+          <h3 class="chart-title">Revenue & Volume Performance Mix</h3>
+          <span style="font-size: 0.75rem; color: var(--text-dim);">By Category</span>
+        </div>
+        <div style="height: 300px; position: relative;">
+          <canvas id="chart-revenue-mix"></canvas>
+        </div>
+      </div>
+
+      <div class="glass-card">
+        <div class="chart-header">
+          <h3 class="chart-title">Regional Benchmark Comparison</h3>
+          <span id="benchmark-region-label" style="font-size: 0.75rem; color: var(--accent-cyan);">West Region Avg</span>
+        </div>
+        <div style="height: 300px; position: relative;">
+          <canvas id="chart-benchmark-radar"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Store Leaderboard (for Multi-Store Owners) -->
+    <div class="glass-card table-card">
+      <div class="chart-header">
+        <h3 class="chart-title">Store Performance Leaderboard</h3>
+        <span style="font-size: 0.78rem; color: var(--text-dim);" id="leaderboard-count">Showing stores</span>
+      </div>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Store #</th>
+            <th>Location</th>
+            <th>Region</th>
+            <th>Gross Revenue</th>
+            <th>Sales Vol</th>
+            <th>Activations</th>
+            <th>CPO Units</th>
+            <th>Repairs (OOW)</th>
+            <th>Traffic</th>
+            <th>Conversion</th>
+          </tr>
+        </thead>
+        <tbody id="leaderboard-tbody">
+          <!-- Filled via AJAX -->
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ==================== TAB 2: CARRIER ACTIVATIONS ==================== -->
+  <div id="tab-activations" class="tab-panel">
+    <div class="charts-grid">
+      <div class="glass-card">
+        <div class="chart-header">
+          <h3 class="chart-title">Weekly Activation Pulse (WoW Trend)</h3>
+          <span style="font-size: 0.75rem; color: var(--accent-purple);">Activations / Week</span>
+        </div>
+        <div style="height: 320px; position: relative;">
+          <canvas id="chart-weekly-activations"></canvas>
+        </div>
+      </div>
+
+      <div class="glass-card">
+        <div class="chart-header">
+          <h3 class="chart-title">Activation Type Breakdown</h3>
+          <span style="font-size: 0.75rem; color: var(--text-dim);">Contract Types</span>
+        </div>
+        <div style="height: 320px; position: relative;">
+          <canvas id="chart-activation-types"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <div class="kpi-grid">
+      <div class="glass-card kpi-card" style="--card-accent: var(--accent-purple);">
+        <div class="kpi-title">Telus vs Koodo Postpaid</div>
+        <div class="kpi-value" id="kpi-postpaid-split">0 / 0</div>
+        <div class="kpi-subtext">Postpaid Contracts</div>
+      </div>
+      <div class="glass-card kpi-card" style="--card-accent: var(--accent-cyan);">
+        <div class="kpi-title">Financed Devices</div>
+        <div class="kpi-value" id="kpi-finance-count">0</div>
+        <div class="kpi-subtext">Hardware Financing Attach</div>
+      </div>
+      <div class="glass-card kpi-card" style="--card-accent: var(--accent-indigo);">
+        <div class="kpi-title">Migrations & Renewals</div>
+        <div class="kpi-value" id="kpi-migrations-count">0</div>
+        <div class="kpi-subtext">Existing Base Upgrades</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== TAB 3: HARDWARE & CPO ==================== -->
+  <div id="tab-cpo" class="tab-panel">
+    <div class="charts-grid">
+      <div class="glass-card">
+        <div class="chart-header">
+          <h3 class="chart-title">Weekly CPO Sales Volume</h3>
+          <span style="font-size: 0.75rem; color: var(--accent-emerald);">Units / Week</span>
+        </div>
+        <div style="height: 320px; position: relative;">
+          <canvas id="chart-weekly-cpo"></canvas>
+        </div>
+      </div>
+
+      <div class="glass-card">
+        <div class="chart-header">
+          <h3 class="chart-title">CPO Activation Attach Rate</h3>
+          <span style="font-size: 0.75rem; color: var(--text-dim);">Phone to Plan Conversion</span>
+        </div>
+        <div style="text-align: center; padding: 40px 0;">
+          <div style="font-size: 3.5rem; font-weight: 800; font-family: var(--font-heading); color: var(--accent-emerald);" id="cpo-attach-rate-display">0%</div>
+          <p style="color: var(--text-muted); font-size: 0.9rem; margin-top: 8px;">CPO Devices Attached to a New Carrier Activation</p>
+          <div style="margin-top: 24px; display: inline-flex; gap: 20px;">
+            <div><span style="color:var(--text-dim);font-size:0.75rem;">TOTAL CPO</span><h4 id="disp-cpo-total">0</h4></div>
+            <div><span style="color:var(--text-dim);font-size:0.75rem;">ATTACHED ACT</span><h4 id="disp-cpo-attached">0</h4></div>
+            <div><span style="color:var(--text-dim);font-size:0.75rem;">TRADE-INS</span><h4 id="disp-trade-ins">0</h4></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== TAB 4: REPAIRS & TECHNICAL ==================== -->
+  <div id="tab-repairs" class="tab-panel">
+    <div class="charts-grid">
+      <div class="glass-card">
+        <div class="chart-header">
+          <h3 class="chart-title">Weekly Walk-In Repair Volume</h3>
+          <span style="font-size: 0.75rem; color: var(--accent-amber);">Repairs / Week</span>
+        </div>
+        <div style="height: 320px; position: relative;">
+          <canvas id="chart-weekly-repairs"></canvas>
+        </div>
+      </div>
+
+      <div class="glass-card">
+        <div class="chart-header">
+          <h3 class="chart-title">Repair Volume Breakdown</h3>
+          <span style="font-size: 0.75rem; color: var(--text-dim);">OOW vs Insurance</span>
+        </div>
+        <div style="height: 320px; position: relative;">
+          <canvas id="chart-repairs-split"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <div class="kpi-grid">
+      <div class="glass-card kpi-card" style="--card-accent: var(--accent-amber);">
+        <div class="kpi-title">Daily Repair Velocity</div>
+        <div class="kpi-value" id="kpi-repairs-daily">0.0</div>
+        <div class="kpi-subtext">Avg Out-of-Warranty repairs / day</div>
+      </div>
+      <div class="glass-card kpi-card" style="--card-accent: var(--accent-emerald);">
+        <div class="kpi-title">Repair-to-Activation Attach</div>
+        <div class="kpi-value" id="kpi-repair-attach-rate">0%</div>
+        <div class="kpi-subtext">Repairs converted into line activations</div>
+      </div>
+      <div class="glass-card kpi-card" style="--card-accent: var(--accent-cyan);">
+        <div class="kpi-title">Total Repair Revenue</div>
+        <div class="kpi-value" id="kpi-total-repair-rev">$0</div>
+        <div class="kpi-subtext">Combined OOW + Insurance</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== TAB 5: ACCESSORIES & BUNDLES ==================== -->
+  <div id="tab-accessories" class="tab-panel">
+    <div class="kpi-grid">
+      <div class="glass-card kpi-card" style="--card-accent: var(--accent-cyan);">
+        <div class="kpi-title">Accessory Revenue</div>
+        <div class="kpi-value" id="kpi-acc-revenue">$0</div>
+        <div class="kpi-subtext">Total MTD</div>
+      </div>
+      <div class="glass-card kpi-card" style="--card-accent: var(--accent-indigo);">
+        <div class="kpi-title">Accessory Units</div>
+        <div class="kpi-value" id="kpi-acc-volume">0</div>
+        <div class="kpi-subtext">Items Sold</div>
+      </div>
+      <div class="glass-card kpi-card" style="--card-accent: var(--accent-purple);">
+        <div class="kpi-title">Protection Bundles</div>
+        <div class="kpi-value" id="kpi-protection-bundles">0</div>
+        <div class="kpi-subtext">AppleCare & Warranty Plans</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== TAB 6: TRAFFIC & FUNNEL ==================== -->
+  <div id="tab-traffic" class="tab-panel">
+    <div class="charts-grid">
+      <div class="glass-card">
+        <div class="chart-header">
+          <h3 class="chart-title">Weekly Foot Traffic Trend</h3>
+          <span style="font-size: 0.75rem; color: var(--accent-rose);">Door Counter</span>
+        </div>
+        <div style="height: 320px; position: relative;">
+          <canvas id="chart-weekly-traffic"></canvas>
+        </div>
+      </div>
+
+      <div class="glass-card">
+        <div class="chart-header">
+          <h3 class="chart-title">Store Conversion Funnel</h3>
+          <span style="font-size: 0.75rem; color: var(--text-dim);">Efficiency</span>
+        </div>
+        <div style="padding: 24px 12px; display: flex; flex-direction: column; gap: 14px;">
+          <div>
+            <div style="display: flex; justify-content: space-between; font-size: 0.82rem; margin-bottom: 4px;">
+              <span>1. Total Door Traffic</span>
+              <strong id="funnel-traffic">0</strong>
+            </div>
+            <div style="background: rgba(255,255,255,0.06); height: 10px; border-radius: 5px; overflow: hidden;">
+              <div style="background: var(--accent-rose); width: 100%; height: 100%;"></div>
+            </div>
+          </div>
+
+          <div>
+            <div style="display: flex; justify-content: space-between; font-size: 0.82rem; margin-bottom: 4px;">
+              <span>2. Tickets Opened (7-Day MA)</span>
+              <strong id="funnel-tickets">0</strong>
+            </div>
+            <div style="background: rgba(255,255,255,0.06); height: 10px; border-radius: 5px; overflow: hidden;">
+              <div id="funnel-tickets-bar" style="background: var(--accent-amber); width: 40%; height: 100%;"></div>
+            </div>
+          </div>
+
+          <div>
+            <div style="display: flex; justify-content: space-between; font-size: 0.82rem; margin-bottom: 4px;">
+              <span>3. Total Closed Sales (Act + CPO + Repairs)</span>
+              <strong id="funnel-sales">0</strong>
+            </div>
+            <div style="background: rgba(255,255,255,0.06); height: 10px; border-radius: 5px; overflow: hidden;">
+              <div id="funnel-sales-bar" style="background: var(--accent-emerald); width: 25%; height: 100%;"></div>
+            </div>
+          </div>
+
+          <div style="text-align: center; margin-top: 10px;">
+            <span style="font-size: 0.75rem; color: var(--text-dim);">OVERALL CONVERSION RATE</span>
+            <div style="font-size: 2rem; font-weight: 800; font-family: var(--font-heading); color: var(--accent-emerald);" id="funnel-conversion-rate">0%</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== TAB 7: BENCHMARK & RANKING ==================== -->
+  <div id="tab-benchmark" class="tab-panel">
+    <div class="glass-card" style="margin-bottom: 24px;">
+      <div class="chart-header">
+        <h3 class="chart-title">Multi-Store Revenue & Volume Comparison</h3>
+        <span style="font-size: 0.75rem; color: var(--text-dim);">Compare Across Selected Stores</span>
+      </div>
+      <div style="height: 380px; position: relative;">
+        <canvas id="chart-multi-store-bar"></canvas>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Parameter Customization Modal -->
+<div id="param-modal" class="modal-overlay">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3 class="modal-title">Customize Dashboard Parameters</h3>
+      <button onclick="closeParamModal()" style="background:none;border:none;color:var(--text-muted);font-size:1.4rem;cursor:pointer;">&times;</button>
+    </div>
+    <p style="color: var(--text-dim); font-size: 0.82rem;">Toggle parameters on or off to personalize the metric cards on your screen.</p>
+    
+    <div style="display: flex; gap: 8px; margin: 14px 0;">
+      <button class="btn btn-secondary" style="font-size:0.75rem;padding:4px 10px;" onclick="applyPreset('executive')">Executive Preset</button>
+      <button class="btn btn-secondary" style="font-size:0.75rem;padding:4px 10px;" onclick="applyPreset('sales')">Sales Preset</button>
+      <button class="btn btn-secondary" style="font-size:0.75rem;padding:4px 10px;" onclick="applyPreset('service')">Service Preset</button>
+      <button class="btn btn-secondary" style="font-size:0.75rem;padding:4px 10px;" onclick="applyPreset('all')">Select All</button>
+    </div>
+
+    <div class="param-chips-grid">
+      <label class="param-chip"><input type="checkbox" id="chk-revenue" checked onchange="toggleCardVisibility('revenue', this.checked)"> Gross Revenue</label>
+      <label class="param-chip"><input type="checkbox" id="chk-volume" checked onchange="toggleCardVisibility('volume', this.checked)"> Sales Volume</label>
+      <label class="param-chip"><input type="checkbox" id="chk-activations" checked onchange="toggleCardVisibility('activations', this.checked)"> Carrier Activations</label>
+      <label class="param-chip"><input type="checkbox" id="chk-cpo" checked onchange="toggleCardVisibility('cpo', this.checked)"> CPO Hardware Units</label>
+      <label class="param-chip"><input type="checkbox" id="chk-repairs" checked onchange="toggleCardVisibility('repairs', this.checked)"> Total Repairs</label>
+      <label class="param-chip"><input type="checkbox" id="chk-conversion" checked onchange="toggleCardVisibility('conversion', this.checked)"> Conversion Rate</label>
+    </div>
+
+    <div style="display: flex; justify-content: flex-end; margin-top: 18px;">
+      <button class="btn btn-primary" onclick="closeParamModal()">Save Preferences</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+{% endblock %}
