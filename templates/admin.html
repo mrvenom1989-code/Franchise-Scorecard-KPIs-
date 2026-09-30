@@ -54,6 +54,7 @@
           <th>Organization</th>
           <th>Assigned Stores</th>
           <th>Status</th>
+          <th style="text-align: right;">Actions</th>
         </tr>
       </thead>
       <tbody>
@@ -83,6 +84,22 @@
             <span class="delta-badge {{ 'delta-positive' if u.is_active else 'delta-negative' }}">
               {{ 'Active' if u.is_active else 'Inactive' }}
             </span>
+          </td>
+          <td style="text-align: right;">
+            {% if current_user.role == 'super_admin' or (u.role != 'super_admin' and u.role != 'admin') or u.id == current_user.id %}
+            <button type="button" class="btn btn-secondary" style="padding: 5px 12px; font-size: 0.78rem; gap: 5px;"
+              data-user-id="{{ u.id }}"
+              data-full-name="{{ u.full_name }}"
+              data-email="{{ u.email }}"
+              data-role="{{ u.role }}"
+              data-is-active="{{ 'true' if u.is_active else 'false' }}"
+              data-stores="{{ u.assigned_store_numbers | join(',') }}"
+              onclick="openEditUserModal(this)">
+              <i data-feather="edit-2" style="width: 13px; height: 13px;"></i> Edit
+            </button>
+            {% else %}
+            <span style="color: var(--text-dim); font-size: 0.75rem; font-style: italic;">Protected</span>
+            {% endif %}
           </td>
         </tr>
         {% endfor %}
@@ -151,6 +168,90 @@
     </form>
   </div>
 </div>
+
+<!-- Edit User Modal -->
+<div id="edit-user-modal" class="modal-overlay">
+  <div class="modal-content" style="max-width: 580px;">
+    <div class="modal-header">
+      <h3 class="modal-title">Edit Team Member</h3>
+      <button onclick="closeEditUserModal()" style="background:none;border:none;color:var(--text-muted);font-size:1.4rem;cursor:pointer;">&times;</button>
+    </div>
+    
+    <form action="{{ url_for('admin.edit_user_route') }}" method="POST">
+      <input type="hidden" name="user_id" id="edit-user-id">
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px;">
+        <div>
+          <label style="display:block;font-size:0.78rem;font-weight:600;color:var(--text-muted);margin-bottom:6px;">Full Name</label>
+          <input type="text" name="full_name" id="edit-full-name" required class="select-control" style="width: 100%;">
+        </div>
+        <div>
+          <label style="display:block;font-size:0.78rem;font-weight:600;color:var(--text-muted);margin-bottom:6px;">Role</label>
+          <select name="role" id="edit-role" class="select-control" style="width: 100%;" onchange="toggleEditStoresVisibility(this.value)">
+            {% if current_user.role == 'super_admin' %}
+            <option value="admin">🏢 Admin (Franchise Owner - Multi Store)</option>
+            <option value="super_admin">👑 Super Administrator</option>
+            {% endif %}
+            <option value="store_manager">🏬 Store Manager</option>
+            <option value="accountant">💼 Accountant (Read-Only)</option>
+            <option value="staff">🔧 Frontline Staff (Financial Masked)</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px;">
+        <div>
+          <label style="display:block;font-size:0.78rem;font-weight:600;color:var(--text-muted);margin-bottom:6px;">Email Address</label>
+          <input type="email" id="edit-email" disabled class="select-control" style="width: 100%; opacity: 0.7; cursor: not-allowed;">
+        </div>
+        <div>
+          <label style="display:block;font-size:0.78rem;font-weight:600;color:var(--text-muted);margin-bottom:6px;">Account Status</label>
+          <select name="is_active" id="edit-is-active" class="select-control" style="width: 100%;">
+            <option value="true">Active (Can log in)</option>
+            <option value="false">Suspended / Inactive</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="margin-bottom: 14px;">
+        <label style="display:block;font-size:0.78rem;font-weight:600;color:var(--text-muted);margin-bottom:6px;">
+          Reset Password <span style="font-weight: normal; color: var(--text-dim);">(leave blank to keep unchanged)</span>
+        </label>
+        <input type="password" name="password" id="edit-password" placeholder="Enter new password to reset" class="select-control" style="width: 100%;">
+      </div>
+
+      <!-- Super Admin Global Access Banner -->
+      <div id="edit-super-admin-banner" style="display: none; margin-bottom: 20px; padding: 12px 14px; background: rgba(99, 102, 241, 0.12); border: 1px solid var(--accent-indigo); border-radius: var(--radius-md); font-size: 0.82rem; color: #c7d2fe;">
+        <i data-feather="info" style="width: 14px; height: 14px; vertical-align: middle; margin-right: 4px;"></i>
+        Super Administrators automatically receive full access to all network locations. Individual store assignment is not required.
+      </div>
+
+      <!-- Store Assignment Multi-Select Checkboxes -->
+      <div style="margin-bottom: 20px;" id="edit-stores-section">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+          <label style="font-size:0.78rem;font-weight:600;color:var(--text-muted);">Assign Store Locations</label>
+          <div style="display:flex; gap:6px;">
+            <button type="button" class="btn btn-secondary" style="font-size:0.7rem;padding:2px 8px;" onclick="setAllEditStoreCheckboxes(true)">All</button>
+            <button type="button" class="btn btn-secondary" style="font-size:0.7rem;padding:2px 8px;" onclick="setAllEditStoreCheckboxes(false)">Clear</button>
+          </div>
+        </div>
+        <div class="param-chips-grid" style="max-height: 200px;">
+          {% for loc in assignable_locations %}
+          <label class="param-chip edit-store-chip" data-store-num="{{ loc.store_number }}">
+            <input type="checkbox" name="stores" value="{{ loc.store_number }}" class="edit-store-cb">
+            #{{ loc.store_number }} {{ loc.name.replace('Mobile Klinik ', '') }}
+          </label>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div style="display: flex; justify-content: flex-end; gap: 10px;">
+        <button type="button" class="btn btn-secondary" onclick="closeEditUserModal()">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save Changes</button>
+      </div>
+    </form>
+  </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
@@ -160,6 +261,54 @@
   }
   function closeCreateUserModal() {
     document.getElementById('create-user-modal').classList.remove('active');
+  }
+
+  function openEditUserModal(btn) {
+    const userId = btn.dataset.userId;
+    const fullName = btn.dataset.fullName;
+    const email = btn.dataset.email;
+    const role = btn.dataset.role;
+    const isActive = btn.dataset.isActive;
+    const stores = (btn.dataset.stores || "").split(",").filter(Boolean);
+
+    document.getElementById('edit-user-id').value = userId;
+    document.getElementById('edit-full-name').value = fullName;
+    document.getElementById('edit-email').value = email;
+    document.getElementById('edit-role').value = role;
+    document.getElementById('edit-is-active').value = isActive;
+    document.getElementById('edit-password').value = "";
+
+    const storeSet = new Set(stores);
+    document.querySelectorAll('.edit-store-cb').forEach(cb => {
+      cb.checked = storeSet.has(cb.value);
+    });
+
+    toggleEditStoresVisibility(role);
+
+    document.getElementById('edit-user-modal').classList.add('active');
+    if (window.feather) feather.replace();
+  }
+
+  function closeEditUserModal() {
+    document.getElementById('edit-user-modal').classList.remove('active');
+  }
+
+  function toggleEditStoresVisibility(role) {
+    const sec = document.getElementById('edit-stores-section');
+    const banner = document.getElementById('edit-super-admin-banner');
+    if (role === 'super_admin') {
+      if (sec) sec.style.display = 'none';
+      if (banner) banner.style.display = 'block';
+    } else {
+      if (sec) sec.style.display = 'block';
+      if (banner) banner.style.display = 'none';
+    }
+  }
+
+  function setAllEditStoreCheckboxes(checked) {
+    document.querySelectorAll('.edit-store-cb').forEach(cb => {
+      cb.checked = checked;
+    });
   }
 </script>
 {% endblock %}

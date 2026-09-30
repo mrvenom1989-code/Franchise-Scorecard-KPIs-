@@ -2,7 +2,7 @@ import os
 from flask import Blueprint, render_template, request, redirect, url_for, session, flash, jsonify
 from routes.auth import login_required, roles_required
 from config import supabase
-from create_user import create_or_update_user
+from create_user import create_or_update_user, update_existing_user
 from ingest_scorecard import main as run_ingest
 
 admin_bp = Blueprint('admin', __name__)
@@ -44,6 +44,13 @@ def user_management():
             users = u_resp.data or []
         else:
             users = []
+
+    for u in users:
+        u['assigned_store_numbers'] = [
+            str(acc['locations']['store_number'])
+            for acc in (u.get('user_location_access') or [])
+            if acc.get('locations') and acc['locations'].get('store_number') is not None
+        ]
 
     return render_template(
         'admin.html',
@@ -93,6 +100,67 @@ def create_user_route():
         flash(f"User {email} successfully provisioned as {target_role}!", "success")
     else:
         flash(f"Failed to provision user {email}. Check server logs.", "danger")
+
+    return redirect(url_for('admin.user_management'))
+
+@admin_bp.route('/users/edit', methods=['POST'])
+@login_required
+@roles_required('super_admin', 'admin')
+def edit_user_route():
+    current_user = session['user']
+    role = current_user['role']
+
+    user_id = request.form.get('user_id', '').strip()
+    full_name = request.form.get('full_name', '').strip()
+    target_role = request.form.get('role', 'store_manager')
+    is_active = request.form.get('is_active') == 'true'
+    password = request.form.get('password', '').strip() or None
+    selected_stores = request.form.getlist('stores')
+
+    if not user_id:
+        flash("Missing user ID.", "danger")
+        return redirect(url_for('admin.user_management'))
+
+    # Security check: Check the target user being edited
+    target_resp = supabase.table('user_profiles').select('*').eq('id', user_id).execute()
+    if not target_resp.data:
+        flash("Target user profile not found.", "danger")
+        return redirect(url_for('admin.user_management'))
+    
+    target_profile = target_resp.data[0]
+
+    # Permission rules for franchise owner ('admin'):
+    if role == 'admin':
+        # Cannot edit a super_admin or another admin
+        if target_profile.get('role') in ['super_admin', 'admin'] and user_id != current_user['id']:
+            flash("You do not have permission to edit this administrative user.", "danger")
+            return redirect(url_for('admin.user_management'))
+
+        # Cannot elevate to super_admin or admin
+        if target_role not in ['store_manager', 'staff', 'accountant']:
+            flash("Franchise owners can only assign Store Manager, Accountant, or Staff roles.", "danger")
+            return redirect(url_for('admin.user_management'))
+
+        # Stores assigned must be within the admin's permitted locations
+        permitted_store_nums = {str(loc['store_number']) for loc in current_user.get('locations', [])}
+        for s in selected_stores:
+            if s not in permitted_store_nums:
+                flash(f"Unauthorized store assignment: Store #{s}", "danger")
+                return redirect(url_for('admin.user_management'))
+
+    success = update_existing_user(
+        user_id=user_id,
+        full_name=full_name,
+        role=target_role,
+        is_active=is_active,
+        stores=selected_stores,
+        password=password
+    )
+
+    if success:
+        flash(f"User '{full_name}' updated successfully!", "success")
+    else:
+        flash(f"Failed to update user '{full_name}'. Check logs.", "danger")
 
     return redirect(url_for('admin.user_management'))
 

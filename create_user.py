@@ -80,6 +80,71 @@ def create_or_update_user(email, password, full_name, role, stores=None, org_nam
     print(f"\n[SUCCESS] User {email} configured successfully as '{role}'!")
     return True
 
+def update_existing_user(user_id, full_name, role, is_active=True, stores=None, password=None, org_name=None):
+    if not supabase:
+        print("[ERROR] Supabase client not initialized.")
+        return False
+
+    print(f"Updating user ID: {user_id}...")
+    try:
+        # 1. Update Auth if password or metadata changed
+        auth_attrs = {
+            "user_metadata": {
+                "full_name": full_name,
+                "role": role
+            }
+        }
+        if password and str(password).strip():
+            auth_attrs["password"] = str(password).strip()
+
+        supabase.auth.admin.update_user_by_id(user_id, auth_attrs)
+        print("  > Auth user attributes updated.")
+    except Exception as e:
+        print(f"[WARN] Failed to update auth attributes: {e}")
+
+    # 2. Update user_profiles
+    profile_data = {
+        "full_name": full_name,
+        "role": role,
+        "is_active": is_active
+    }
+    if org_name:
+        profile_data["organization_name"] = org_name
+
+    try:
+        supabase.table("user_profiles").update(profile_data).eq("id", user_id).execute()
+        print("  > User profile updated.")
+    except Exception as e:
+        print(f"[ERROR] Failed to update user profile: {e}")
+        return False
+
+    # 3. Update store assignments
+    try:
+        # Remove previous mappings
+        supabase.table("user_location_access").delete().eq("user_id", user_id).execute()
+
+        if stores and role != "super_admin":
+            if isinstance(stores, str):
+                store_nums = [int(s.strip()) for s in stores.split(",") if s.strip().isdigit()]
+            elif isinstance(stores, list):
+                store_nums = [int(s) for s in stores if str(s).isdigit()]
+            else:
+                store_nums = []
+
+            if store_nums:
+                loc_resp = supabase.table("locations").select("id, store_number").in_("store_number", store_nums).execute()
+                loc_ids = [r["id"] for r in (loc_resp.data or [])]
+                access_rows = [{"user_id": user_id, "location_id": lid} for lid in loc_ids]
+                if access_rows:
+                    supabase.table("user_location_access").insert(access_rows).execute()
+                    print(f"  > Assigned {len(access_rows)} locations to user.")
+    except Exception as e:
+        print(f"[ERROR] Failed to update store assignments: {e}")
+        return False
+
+    print(f"[SUCCESS] User {user_id} updated successfully!")
+    return True
+
 def main():
     parser = argparse.ArgumentParser(description="Create or update a Franchise Scorecard user")
     parser.add_argument("--email", required=True, help="User email address")
