@@ -6,21 +6,48 @@
 <!-- Global Filter Control Bar -->
 <section class="control-bar glass">
   <div class="filter-group">
-    <!-- Store / Location Selector -->
-    <div style="display: flex; align-items: center; gap: 8px;">
-      <i data-feather="map-pin" style="width: 16px; height: 16px; color: var(--accent-indigo);"></i>
+    <!-- Store / Location Multi-Select Checkbox Dropdown -->
+    <div style="position: relative;">
       {% if locations|length > 1 or session.user.role == 'super_admin' %}
-      <select id="location-select" class="select-control" onchange="loadDashboardData()">
-        <option value="all">🏢 All Accessible Locations (Consolidated Portfolio)</option>
-        {% for loc in locations %}
-        <option value="{{ loc.id }}">Store #{{ loc.store_number }} — {{ loc.name }} ({{ loc.region }})</option>
-        {% endfor %}
-      </select>
+      <div class="store-multiselect-wrapper" id="store-multiselect-container">
+        <button type="button" class="btn btn-secondary select-control" id="store-multiselect-btn" onclick="toggleStoreDropdown()" style="display:flex;align-items:center;gap:8px;min-width:260px;justify-content:space-between;">
+          <div style="display:flex;align-items:center;gap:8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:240px;">
+            <i data-feather="map-pin" style="width:14px;height:14px;color:var(--accent-indigo);flex-shrink:0;"></i>
+            <span id="store-multiselect-label">All Accessible Stores ({{ locations|length }})</span>
+          </div>
+          <i data-feather="chevron-down" style="width:14px;height:14px;flex-shrink:0;"></i>
+        </button>
+
+        <!-- Dropdown Menu -->
+        <div class="glass" id="store-dropdown-menu" style="display:none;position:absolute;top:calc(100% + 6px);left:0;z-index:150;min-width:320px;max-width:380px;border-radius:var(--radius-md);padding:12px;box-shadow:0 15px 35px rgba(0,0,0,0.7);border:1px solid var(--border-glass);background:var(--bg-surface);">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--border-glass);">
+            <span style="font-size:0.75rem;font-weight:700;text-transform:uppercase;color:var(--text-muted);letter-spacing:0.5px;">Filter Locations</span>
+            <div style="display:flex;gap:6px;">
+              <button type="button" class="btn btn-secondary" style="font-size:0.7rem;padding:2px 8px;" onclick="setAllStoreCheckboxes(true)">All</button>
+              <button type="button" class="btn btn-secondary" style="font-size:0.7rem;padding:2px 8px;" onclick="setAllStoreCheckboxes(false)">Clear</button>
+            </div>
+          </div>
+          
+          <input type="text" id="store-search-box" placeholder="Search stores..." class="select-control" style="width:100%;margin-bottom:8px;padding:6px 10px;font-size:0.8rem;" oninput="filterStoreCheckboxes()">
+
+          <div id="store-checkboxes-list" style="max-height:220px;overflow-y:auto;display:flex;flex-direction:column;gap:4px;padding-right:4px;">
+            {% for loc in locations %}
+            <label class="store-checkbox-item" data-name="{{ loc.name.lower() }} {{ loc.store_number }}" style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:var(--radius-sm);cursor:pointer;font-size:0.82rem;user-select:none;transition:background 0.15s ease;">
+              <input type="checkbox" class="loc-checkbox" value="{{ loc.id }}" data-store-num="{{ loc.store_number }}" data-name="{{ loc.name }}" checked onchange="onLocationSelectionChange()">
+              <span style="font-weight:600;color:var(--text-main);">#{{ loc.store_number }}</span>
+              <span style="color:var(--text-muted);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ loc.name.replace('Mobile Klinik ', '') }}</span>
+              <span class="role-pill" style="font-size:0.65rem;background:rgba(255,255,255,0.05);">{{ loc.region }}</span>
+            </label>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
       {% else %}
-      <div class="glass" style="padding: 8px 14px; border-radius: var(--radius-md); font-size: 0.85rem; font-weight: 600;">
+      <div class="glass" style="padding: 8px 14px; border-radius: var(--radius-md); font-size: 0.85rem; font-weight: 600; display:flex; align-items:center; gap:8px;">
+        <i data-feather="map-pin" style="width: 14px; height: 14px; color: var(--accent-indigo);"></i>
         Store #{{ locations[0].store_number }} — {{ locations[0].name }}
       </div>
-      <input type="hidden" id="location-select" value="{{ locations[0].id }}">
+      <input type="checkbox" class="loc-checkbox" value="{{ locations[0].id }}" checked style="display:none;">
       {% endif %}
     </div>
 

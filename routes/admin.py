@@ -26,10 +26,24 @@ def user_management():
     else:
         # Franchise owner only sees their own assigned locations
         assignable_locations = current_user.get('locations', [])
+        assignable_loc_ids = [loc['id'] for loc in assignable_locations]
         
-        # Franchise owner sees users they created or users assigned to their locations
-        u_resp = supabase.table('user_profiles').select('*, user_location_access(locations(store_number, name))').eq('created_by', user_id).order('created_at', desc=True).execute()
-        users = u_resp.data or []
+        # Franchise owner sees users created by them or assigned to their locations
+        relevant_user_ids = set()
+        if assignable_loc_ids:
+            loc_acc_resp = supabase.table('user_location_access').select('user_id').in_('location_id', assignable_loc_ids).execute()
+            for r in (loc_acc_resp.data or []):
+                relevant_user_ids.add(r['user_id'])
+
+        created_resp = supabase.table('user_profiles').select('id').eq('created_by', user_id).execute()
+        for r in (created_resp.data or []):
+            relevant_user_ids.add(r['id'])
+
+        if relevant_user_ids:
+            u_resp = supabase.table('user_profiles').select('*, user_location_access(locations(store_number, name))').in_('id', list(relevant_user_ids)).order('created_at', desc=True).execute()
+            users = u_resp.data or []
+        else:
+            users = []
 
     return render_template(
         'admin.html',
@@ -71,7 +85,8 @@ def create_user_route():
         full_name=full_name,
         role=target_role,
         stores=stores_str,
-        org_name=current_user.get('organization_name')
+        org_name=current_user.get('organization_name'),
+        created_by=current_user['id']
     )
 
     if success:

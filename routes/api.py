@@ -6,17 +6,47 @@ from config import supabase
 
 api_bp = Blueprint('api', __name__)
 
+import uuid
+
+def is_valid_uuid(val):
+    try:
+        uuid.UUID(str(val))
+        return True
+    except (ValueError, AttributeError, TypeError):
+        return False
+
 def verify_location_access(user, requested_location_id):
-    """Verifies that the user has permission to view the requested location(s)."""
-    if user['role'] == 'super_admin':
-        return True, None
+    """Verifies that the user has permission to view the requested location(s), supporting comma-separated IDs."""
+    user_role = user.get('role')
     user_loc_ids = set(user.get('location_ids', []))
+
+    if requested_location_id in ['none', 'empty']:
+        return True, []
+
     if requested_location_id in ['all', 'portfolio', '', None]:
-        # Permitted to see all their own stores
+        if user_role == 'super_admin':
+            return True, None
         return True, list(user_loc_ids)
-    if requested_location_id in user_loc_ids:
-        return True, [requested_location_id]
-    return False, []
+
+    # Split comma-separated IDs
+    req_list = [x.strip() for x in str(requested_location_id).split(',') if x.strip()]
+    if not req_list:
+        if user_role == 'super_admin':
+            return True, None
+        return True, list(user_loc_ids)
+
+    if user_role == 'super_admin':
+        valid_uuids = [x for x in req_list if is_valid_uuid(x)]
+        return True, valid_uuids
+
+    # Ensure every requested ID is a valid UUID and in user's permitted locations
+    validated = []
+    for lid in req_list:
+        if lid in user_loc_ids:
+            validated.append(lid)
+        else:
+            return False, []
+    return True, validated
 
 @api_bp.route('/scorecard-data')
 @login_required
@@ -29,6 +59,51 @@ def get_scorecard_data():
     allowed, target_loc_ids = verify_location_access(user, loc_param)
     if not allowed:
         return jsonify({"error": "Unauthorized access to requested location."}), 403
+
+    # If user explicitly deselected all stores
+    if target_loc_ids == []:
+        return jsonify({
+            "period_id": period_id,
+            "count": 0,
+            "summary": {
+                "gross_revenue_actual": 0.0,
+                "gross_revenue_projected": 0.0,
+                "sales_volume": 0,
+                "asp": 0.0,
+                "daily_avg_revenue": 0.0,
+                "activations_total": 0,
+                "activations_new": 0,
+                "activations_renewals": 0,
+                "activations_migrations": 0,
+                "activations_telus_post": 0,
+                "activations_koodo_post": 0,
+                "activations_koodo_pre": 0,
+                "koodo_finance": 0,
+                "telus_finance": 0,
+                "cpo_units_actual": 0,
+                "cpo_units_projected": 0,
+                "cpo_revenue_actual": 0.0,
+                "cpo_attach_activations_count": 0,
+                "cpo_avg_sale": 0.0,
+                "trade_in_units": 0,
+                "repairs_oow_volume": 0,
+                "repairs_oow_revenue": 0.0,
+                "repairs_oow_daily_avg": 0.0,
+                "repair_attach_activations_count": 0,
+                "repairs_insurance_volume": 0,
+                "repairs_insurance_revenue": 0.0,
+                "accessories_volume": 0,
+                "accessories_revenue": 0.0,
+                "protection_bundles_volume": 0,
+                "foot_traffic_total": 0,
+                "foot_traffic_daily_avg": 0.0,
+                "foot_traffic_7day_ma": 0.0,
+                "tickets_opened_7day_ma": 0.0,
+                "conversion_rate_pct": 0.0
+            },
+            "store_rows": [],
+            "benchmark": {}
+        })
 
     try:
         # Default to latest period if none provided
@@ -135,7 +210,7 @@ def get_scorecard_data():
         # Anonymized Regional Benchmark (e.g. WEST Region Average across all franchise stores)
         benchmark = {}
         try:
-            sample_reg = store_rows[0].get('region', 'WEST')
+            sample_reg = store_rows[0].get('region', 'WEST') if store_rows else 'WEST'
             bm_resp = supabase.table('monthly_kpis').select('gross_revenue_actual, sales_volume, activations_total, cpo_units_actual, repairs_oow_volume, foot_traffic_total, locations!inner(region, store_type)').eq('period_id', period_id).eq('locations.region', sample_reg).eq('locations.store_type', 'franchise').execute()
             bm_data = bm_resp.data or []
             if bm_data:
@@ -176,6 +251,12 @@ def get_weekly_trend():
     allowed, target_loc_ids = verify_location_access(user, loc_param)
     if not allowed:
         return jsonify({"error": "Unauthorized"}), 403
+
+    if target_loc_ids == []:
+        return jsonify({
+            "metric_type": metric_type,
+            "trend": []
+        })
 
     try:
         query = supabase.table('weekly_kpis').select('week_end_date, value, wow_delta, location_id').eq('metric_type', metric_type).order('week_end_date')
@@ -222,6 +303,22 @@ def export_csv():
     allowed, target_loc_ids = verify_location_access(user, loc_param)
     if not allowed:
         return Response("Unauthorized", status=403)
+
+    if target_loc_ids == []:
+        si = io.StringIO()
+        cw = csv.writer(si)
+        cw.writerow([
+            "Store #", "Store Name", "Region", "Gross Revenue ($)", "Projected Revenue ($)",
+            "Sales Volume", "ASP ($)", "Total Activations", "New Activations", "Renewals",
+            "CPO Units", "CPO Revenue ($)", "CPO Attach %", "OOW Repairs", "OOW Revenue ($)",
+            "Insurance Repairs", "Insurance Revenue ($)", "Accessory Revenue ($)",
+            "Protection Bundles", "Foot Traffic", "Conversion Rate %"
+        ])
+        return Response(
+            si.getvalue(),
+            mimetype="text/csv",
+            headers={"Content-Disposition": "attachment;filename=scorecard_export.csv"}
+        )
 
     query = supabase.table('monthly_kpis').select('*, locations(store_number, name, region)').eq('period_id', period_id)
     if target_loc_ids is not None:

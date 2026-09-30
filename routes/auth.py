@@ -21,7 +21,7 @@ def roles_required(*allowed_roles):
             if 'user' not in session:
                 return redirect(url_for('auth.login'))
             user_role = session['user'].get('role')
-            if user_role not in allowed_roles and 'super_admin' not in allowed_roles:
+            if user_role != 'super_admin' and user_role not in allowed_roles:
                 flash("Unauthorized access for your user role.", "danger")
                 return redirect(url_for('dashboard.index'))
             return f(*args, **kwargs)

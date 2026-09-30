@@ -197,10 +197,15 @@ def parse_wow_sheet(ws, sheet_name, metric_type):
     for c_idx, val in enumerate(header_row):
         if isinstance(val, (datetime, date)):
             d = val.date() if isinstance(val, datetime) else val
+            # Correct typo in Excel file: 2026-12-XX should be 2025-12-XX
+            if d.year == 2026 and d.month == 12:
+                d = date(2025, 12, d.day)
             date_cols.append((c_idx, d))
         elif isinstance(val, str) and ("2025" in val or "2026" in val):
             try:
                 d = datetime.strptime(val[:10], "%Y-%m-%d").date()
+                if d.year == 2026 and d.month == 12:
+                    d = date(2025, 12, d.day)
                 date_cols.append((c_idx, d))
             except Exception:
                 pass
@@ -244,18 +249,23 @@ def main():
     print(f"Sheets in workbook: {wb.sheetnames}")
 
     all_monthly = {}
-    monthly_sheets = ['Jan 26 MTD', 'Dec 2025 ', 'Nov 25', 'Oct 2025', 'Sept 2025']
+    wow_sheets = {"WOW Activation", "WOW CPO Volume", "WOW WI Repair Volume", "WOW Traffic"}
+    # Dynamically discover all monthly scorecard sheets (ignoring weekly WOW sheets, Cover, etc.)
+    monthly_sheets = [s for s in wb.sheetnames if s.strip() not in wow_sheets and not s.strip().startswith("Cover") and not s.strip().startswith("Outdoor")]
+    print(f"Dynamically discovered {len(monthly_sheets)} monthly scorecard sheet(s): {monthly_sheets}")
+
     for s_name in monthly_sheets:
         if s_name in wb.sheetnames:
             print(f"Parsing monthly sheet: {s_name}...")
             records, p_start, p_end, p_type = parse_monthly_sheet(wb[s_name], s_name)
-            all_monthly[s_name] = {
-                "records": records,
-                "start_date": p_start,
-                "end_date": p_end,
-                "period_type": p_type
-            }
-            print(f"  > Extracted {len(records)} store records ({p_start} to {p_end}).")
+            if records:
+                all_monthly[s_name] = {
+                    "records": records,
+                    "start_date": p_start,
+                    "end_date": p_end,
+                    "period_type": p_type
+                }
+                print(f"  > Extracted {len(records)} store records ({p_start} to {p_end}).")
 
     all_weekly = []
     wow_map = {
@@ -318,6 +328,22 @@ def main():
             item = dict(r["kpis"])
             item["location_id"] = loc_id
             item["period_id"] = period_id
+
+            # Fallback: If monthly sheet omitted traffic (e.g. Jan 26 sensor outage), sum available weekly traffic
+            if item.get("foot_traffic_total", 0) == 0:
+                w_traffic_sum = 0
+                for w in all_weekly:
+                    if w["store_number"] == r["store_number"] and w["metric_type"] == "traffic":
+                        w_date = str(w["week_end_date"])
+                        if str(p_info["start_date"]) <= w_date <= str(p_info["end_date"]):
+                            w_traffic_sum += int(w["value"] or 0)
+                if w_traffic_sum > 0:
+                    item["foot_traffic_total"] = w_traffic_sum
+                    p_days = (p_info["end_date"] - p_info["start_date"]).days + 1
+                    item["foot_traffic_daily_avg"] = round(w_traffic_sum / max(1, p_days), 1)
+                    tot_sales = item["activations_total"] + item["cpo_units_actual"] + item["repairs_oow_volume"]
+                    item["conversion_rate_pct"] = round((tot_sales / w_traffic_sum) * 100.0, 2)
+
             kpi_payload.append(item)
         
         if kpi_payload:

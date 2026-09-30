@@ -3,7 +3,7 @@ import sys
 import argparse
 from config import supabase
 
-def create_or_update_user(email, password, full_name, role, stores=None, org_name=None):
+def create_or_update_user(email, password, full_name, role, stores=None, org_name=None, created_by=None):
     if not supabase:
         print("[ERROR] Supabase client not initialized. Check your .env file.")
         return False
@@ -49,6 +49,9 @@ def create_or_update_user(email, password, full_name, role, stores=None, org_nam
         "organization_name": org_name or ("Mobile Klinik Network" if role == "super_admin" else "Franchise Group"),
         "is_active": True
     }
+    if created_by:
+        profile_data["created_by"] = created_by
+
     try:
         supabase.table("user_profiles").upsert(profile_data, on_conflict="id").execute()
         print(f"  > Profile upserted with role '{role}'.")

@@ -515,3 +515,49 @@ body {
 
 .alert-danger { background: rgba(244, 63, 94, 0.15); border: 1px solid var(--accent-rose); color: #fda4af; }
 .alert-success { background: rgba(16, 185, 129, 0.15); border: 1px solid var(--accent-emerald); color: #6ee7b7; }
+
+/* Store Multiselect Dropdown & Checkboxes */
+.store-multiselect-wrapper {
+  position: relative;
+}
+
+.store-checkbox-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 0.82rem;
+  user-select: none;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.store-checkbox-item:hover {
+  background: rgba(255, 255, 255, 0.08) !important;
+}
+
+.store-checkbox-item input[type="checkbox"] {
+  accent-color: var(--accent-indigo);
+  cursor: pointer;
+  width: 14px;
+  height: 14px;
+}
+
+#store-checkboxes-list::-webkit-scrollbar {
+  width: 5px;
+}
+
+#store-checkboxes-list::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 4px;
+}
+
+#store-checkboxes-list::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 4px;
+}
+
+#store-checkboxes-list::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
