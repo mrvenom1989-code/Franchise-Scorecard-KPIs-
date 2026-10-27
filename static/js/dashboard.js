@@ -205,22 +205,29 @@ function renderRevenueMixChart(s) {
         label: "Revenue Contribution ($)",
         data: [s.cpo_revenue_actual, s.repairs_oow_revenue, s.repairs_insurance_revenue, s.accessories_revenue],
         backgroundColor: ["#10b981", "#f59e0b", "#06b6d4", "#6366f1"],
+        borderColor: ["#34d399", "#fbbf24", "#22d3ee", "#818cf8"],
+        borderWidth: 1.5,
         borderRadius: 6
       }]
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      layout: { padding: { top: 25 } },
+      layout: { padding: { top: 32 } },
       plugins: {
         legend: { display: false },
         datalabels: {
           display: true,
-          color: "#ffffff",
+          color: ctx => ["#34d399", "#fbbf24", "#22d3ee", "#a5b4fc"][ctx.dataIndex] || "#ffffff",
+          backgroundColor: "rgba(15, 23, 42, 0.94)",
+          borderColor: ctx => ["#10b981", "#f59e0b", "#06b6d4", "#6366f1"][ctx.dataIndex] || "#38bdf8",
+          borderWidth: 1.5,
+          borderRadius: 6,
+          padding: { top: 3, bottom: 3, left: 6, right: 6 },
           anchor: "end",
           align: "top",
-          offset: 4,
-          font: { weight: "bold", size: 11 },
+          offset: 5,
+          font: { family: "'Plus Jakarta Sans', sans-serif", weight: "800", size: 11 },
           formatter: v => v > 0 ? formatCompactCurrency(v) : ""
         },
         tooltip: {
@@ -229,12 +236,12 @@ function renderRevenueMixChart(s) {
       },
       scales: {
         y: {
-          grid: { color: "rgba(255,255,255,0.05)" },
-          ticks: { color: "#94a3b8", callback: v => "$" + (v / 1000) + "k" }
+          grid: { color: "rgba(255, 255, 255, 0.08)" },
+          ticks: { color: "#e2e8f0", font: { weight: "600", size: 11 }, callback: v => "$" + (v / 1000) + "k" }
         },
         x: {
           grid: { display: false },
-          ticks: { color: "#94a3b8" }
+          ticks: { color: "#e2e8f0", font: { weight: "600", size: 11 } }
         }
       }
     }
@@ -371,18 +378,23 @@ function renderBenchmarkRadarChart(s, modeOrBm, data) {
       maintainAspectRatio: false,
       scales: {
         r: {
-          grid: { color: "rgba(255,255,255,0.06)" },
-          angleLines: { color: "rgba(255,255,255,0.06)" },
+          grid: { color: "rgba(255, 255, 255, 0.08)" },
+          angleLines: { color: "rgba(255, 255, 255, 0.08)" },
           ticks: { display: false },
-          pointLabels: { color: "#94a3b8", font: { size: 10 } }
+          pointLabels: { color: "#e2e8f0", font: { family: "'Plus Jakarta Sans', sans-serif", size: 11, weight: "600" } }
         }
       },
       plugins: {
-        legend: { labels: { color: "#94a3b8", font: { size: 11 } } },
+        legend: { labels: { color: "#e2e8f0", font: { family: "'Plus Jakarta Sans', sans-serif", size: 12, weight: "600" } } },
         datalabels: {
           display: true,
-          color: ctx => ctx.datasetIndex === 0 ? "#a5b4fc" : "transparent",
-          font: { weight: "600", size: 10 },
+          color: ctx => ctx.datasetIndex === 0 ? "#818cf8" : "transparent",
+          backgroundColor: "rgba(15, 23, 42, 0.94)",
+          borderColor: "#6366f1",
+          borderWidth: 1.5,
+          borderRadius: 5,
+          padding: { top: 2, bottom: 2, left: 5, right: 5 },
+          font: { weight: "800", size: 10 },
           align: "top",
           formatter: v => v + "%"
         },
@@ -486,15 +498,20 @@ function updateActivationsTab(data) {
       responsive: true,
       maintainAspectRatio: false,
       plugins: {
-        legend: { position: "bottom", labels: { color: "#94a3b8" } },
+        legend: { position: "bottom", labels: { color: "#e2e8f0", font: { family: "'Plus Jakarta Sans', sans-serif", weight: "600", size: 12 } } },
         datalabels: {
           display: true,
           color: "#ffffff",
-          font: { weight: "bold", size: 11 },
+          backgroundColor: "rgba(15, 23, 42, 0.94)",
+          borderColor: "rgba(255, 255, 255, 0.25)",
+          borderWidth: 1.5,
+          borderRadius: 6,
+          padding: { top: 3, bottom: 3, left: 6, right: 6 },
+          font: { family: "'Plus Jakarta Sans', sans-serif", weight: "800", size: 11 },
           formatter: (v) => {
             if (!v || totActs === 0) return "";
             const pct = Math.round((v / totActs) * 100);
-            return `${v}\n(${pct}%)`;
+            return `${v} (${pct}%)`;
           }
         }
       }
@@ -558,15 +575,20 @@ function updateRepairsTab(data) {
       responsive: true,
       maintainAspectRatio: false,
       plugins: {
-        legend: { position: "bottom", labels: { color: "#94a3b8" } },
+        legend: { position: "bottom", labels: { color: "#e2e8f0", font: { family: "'Plus Jakarta Sans', sans-serif", weight: "600", size: 12 } } },
         datalabels: {
           display: true,
           color: "#ffffff",
-          font: { weight: "bold", size: 11 },
+          backgroundColor: "rgba(15, 23, 42, 0.94)",
+          borderColor: "rgba(255, 255, 255, 0.25)",
+          borderWidth: 1.5,
+          borderRadius: 6,
+          padding: { top: 3, bottom: 3, left: 6, right: 6 },
+          font: { family: "'Plus Jakarta Sans', sans-serif", weight: "800", size: 11 },
           formatter: (v) => {
             if (!v || totRep === 0) return "";
             const pct = Math.round((v / totRep) * 100);
-            return `${v}\n(${pct}%)`;
+            return `${v} (${pct}%)`;
           }
         }
       }
@@ -655,16 +677,21 @@ function updateBenchmarkTab(data) {
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      layout: { padding: { top: 25 } },
+      layout: { padding: { top: 32 } },
       plugins: {
-        legend: { labels: { color: "#94a3b8" } },
+        legend: { labels: { color: "#e2e8f0", font: { family: "'Plus Jakarta Sans', sans-serif", weight: "600", size: 12 } } },
         datalabels: {
           display: true,
-          font: { weight: "600", size: 9 },
+          font: { family: "'Plus Jakarta Sans', sans-serif", weight: "800", size: 11 },
           anchor: "end",
           align: "top",
-          offset: 2,
+          offset: 5,
           color: ctx => ctx.datasetIndex === 0 ? "#34d399" : "#c084fc",
+          backgroundColor: "rgba(15, 23, 42, 0.94)",
+          borderColor: ctx => ctx.datasetIndex === 0 ? "#10b981" : "#8b5cf6",
+          borderWidth: 1.5,
+          borderRadius: 6,
+          padding: { top: 3, bottom: 3, left: 6, right: 6 },
           formatter: (v, ctx) => {
             if (!v) return "";
             return ctx.datasetIndex === 0 ? formatCompactCurrency(v) : v;
@@ -675,18 +702,18 @@ function updateBenchmarkTab(data) {
         y: {
           type: "linear",
           position: "left",
-          grid: { color: "rgba(255,255,255,0.05)" },
-          ticks: { color: "#10b981", callback: v => "$" + (v / 1000) + "k" }
+          grid: { color: "rgba(255, 255, 255, 0.08)" },
+          ticks: { color: "#34d399", font: { weight: "600", size: 11 }, callback: v => "$" + (v / 1000) + "k" }
         },
         y1: {
           type: "linear",
           position: "right",
           grid: { display: false },
-          ticks: { color: "#8b5cf6" }
+          ticks: { color: "#c084fc", font: { weight: "600", size: 11 } }
         },
         x: {
           grid: { display: false },
-          ticks: { color: "#94a3b8", maxRotation: 45, minRotation: 20 }
+          ticks: { color: "#e2e8f0", font: { weight: "600", size: 11 }, maxRotation: 45, minRotation: 20 }
         }
       }
     }
@@ -865,7 +892,38 @@ function renderExecutiveGrowthMatrix(matrix, mom, yoy) {
   if (window.feather) feather.replace();
 }
 
-// Executive Monthly Revenue Trend & YoY Comparison Chart
+// ============================================================================
+// HIGH-VISIBILITY DATA LABELS & CHART STYLING ENGINE
+// ============================================================================
+
+/**
+ * Creates an executive glassmorphic pill badge data label for ChartDataLabels.
+ * Prevents numbers from blending into dark backgrounds, lines, or bars.
+ */
+function makePillDataLabel(options = {}) {
+  return {
+    display: options.display !== undefined ? options.display : true,
+    align: options.align || "top",
+    anchor: options.anchor || "end",
+    offset: options.offset !== undefined ? options.offset : 6,
+    clamp: false,
+    clip: false,
+    color: options.color || "#ffffff",
+    backgroundColor: options.backgroundColor || "rgba(15, 23, 42, 0.95)",
+    borderColor: options.borderColor || "rgba(255, 255, 255, 0.25)",
+    borderWidth: 1.5,
+    borderRadius: 6,
+    padding: options.padding || { top: 3, bottom: 3, left: 6, right: 6 },
+    font: {
+      family: "'Plus Jakarta Sans', -apple-system, sans-serif",
+      weight: "800",
+      size: options.fontSize || 11
+    },
+    formatter: options.formatter || (v => (v > 0 ? v : ""))
+  };
+}
+
+// 1. Executive Monthly Revenue Trend & YoY Comparison Chart
 function renderExecutiveRevenueTrendChart(trend, yoyByMonth, mode) {
   const ctx = document.getElementById("chart-executive-revenue-trend");
   if (!ctx) return;
@@ -873,8 +931,8 @@ function renderExecutiveRevenueTrendChart(trend, yoyByMonth, mode) {
 
   if (mode === "yoy") {
     const labels = yoyByMonth.map(m => m.month_name);
-    const data2025 = yoyByMonth.map(m => m.p2025 ? m.p2025.revenue : null);
-    const data2026 = yoyByMonth.map(m => m.p2026 ? m.p2026.revenue : null);
+    const data2025 = yoyByMonth.map(m => (m.p2025 ? m.p2025.revenue : null));
+    const data2026 = yoyByMonth.map(m => (m.p2026 ? m.p2026.revenue : null));
 
     charts.executiveRevenue = new Chart(ctx, {
       type: "bar",
@@ -884,38 +942,51 @@ function renderExecutiveRevenueTrendChart(trend, yoyByMonth, mode) {
           {
             label: "2025 Revenue (Prior Year)",
             data: data2025,
-            backgroundColor: "rgba(245, 158, 11, 0.55)",
+            backgroundColor: "rgba(245, 158, 11, 0.35)",
             borderColor: "#f59e0b",
-            borderWidth: 1.5,
-            borderRadius: 4
+            borderWidth: 2,
+            borderRadius: 6
           },
           {
             label: "2026 Revenue (Current Year)",
             data: data2026,
             backgroundColor: "#10b981",
             borderColor: "#34d399",
-            borderWidth: 1.5,
-            borderRadius: 4
+            borderWidth: 2,
+            borderRadius: 6
           }
         ]
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
-        layout: { padding: { top: 25 } },
+        layout: { padding: { top: 35, bottom: 5, left: 5, right: 10 } },
         plugins: {
-          legend: { labels: { color: "#94a3b8" } },
+          legend: {
+            labels: {
+              color: "#e2e8f0",
+              font: { family: "'Plus Jakarta Sans', sans-serif", weight: "600", size: 12 },
+              usePointStyle: true,
+              boxWidth: 8
+            }
+          },
           datalabels: {
             display: true,
-            font: { weight: "bold", size: 8 },
+            color: ctx => (ctx.datasetIndex === 0 ? "#fbbf24" : "#34d399"),
+            backgroundColor: "rgba(15, 23, 42, 0.95)",
+            borderColor: ctx => (ctx.datasetIndex === 0 ? "#f59e0b" : "#10b981"),
+            borderWidth: 1.5,
+            borderRadius: 6,
+            padding: { top: 3, bottom: 3, left: 6, right: 6 },
+            font: { family: "'Plus Jakarta Sans', sans-serif", weight: "800", size: 11 },
             align: "top",
-            offset: 2,
-            color: ctx => ctx.datasetIndex === 0 ? "#fbbf24" : "#6ee7b7",
-            formatter: (v) => v > 0 ? formatCompactCurrency(v) : ""
+            anchor: "end",
+            offset: 5,
+            formatter: v => (v > 0 ? formatCompactCurrency(v) : "")
           },
           tooltip: {
             callbacks: {
-              afterBody: (items) => {
+              afterBody: items => {
                 const idx = items[0].dataIndex;
                 const m = yoyByMonth[idx];
                 if (m && m.growth && m.growth.revenue_pct !== null) {
@@ -929,12 +1000,19 @@ function renderExecutiveRevenueTrendChart(trend, yoyByMonth, mode) {
         },
         scales: {
           y: {
-            grid: { color: "rgba(255,255,255,0.05)" },
-            ticks: { color: "#10b981", callback: v => "$" + (v / 1000) + "k" }
+            grid: { color: "rgba(255, 255, 255, 0.08)" },
+            ticks: {
+              color: "#34d399",
+              font: { family: "'Plus Jakarta Sans', sans-serif", weight: "600", size: 11 },
+              callback: v => "$" + v / 1000 + "k"
+            }
           },
           x: {
             grid: { display: false },
-            ticks: { color: "#94a3b8" }
+            ticks: {
+              color: "#e2e8f0",
+              font: { family: "'Plus Jakarta Sans', sans-serif", weight: "600", size: 11 }
+            }
           }
         }
       }
@@ -942,7 +1020,6 @@ function renderExecutiveRevenueTrendChart(trend, yoyByMonth, mode) {
   } else {
     const labels = trend.map(t => t.label);
     const revenues = trend.map(t => t.gross_revenue_actual);
-    const pyRevenues = trend.map(t => t.py_revenue || null);
 
     charts.executiveRevenue = new Chart(ctx, {
       type: "bar",
@@ -953,43 +1030,44 @@ function renderExecutiveRevenueTrendChart(trend, yoyByMonth, mode) {
             label: "Gross Revenue ($)",
             data: revenues,
             backgroundColor: "#10b981",
-            borderRadius: 6,
-            order: 2
-          },
-          {
-            label: "Prior Year Baseline (YoY)",
-            data: pyRevenues,
-            type: "line",
-            borderColor: "#f59e0b",
-            borderWidth: 2,
-            borderDash: [5, 4],
-            backgroundColor: "transparent",
-            pointBackgroundColor: "#f59e0b",
-            pointRadius: 5,
-            pointHoverRadius: 7,
-            order: 1
+            borderColor: "#34d399",
+            borderWidth: 1.5,
+            borderRadius: 6
           }
         ]
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
-        layout: { padding: { top: 25 } },
+        layout: { padding: { top: 35, bottom: 5, left: 5, right: 10 } },
         plugins: {
-          legend: { labels: { color: "#94a3b8" } },
+          legend: {
+            labels: {
+              color: "#e2e8f0",
+              font: { family: "'Plus Jakarta Sans', sans-serif", weight: "600", size: 12 },
+              usePointStyle: true,
+              boxWidth: 8
+            }
+          },
           datalabels: {
             display: true,
-            font: { weight: "bold", size: 8 },
+            color: "#34d399",
+            backgroundColor: "rgba(15, 23, 42, 0.95)",
+            borderColor: "#10b981",
+            borderWidth: 1.5,
+            borderRadius: 6,
+            padding: { top: 3, bottom: 3, left: 6, right: 6 },
+            font: { family: "'Plus Jakarta Sans', sans-serif", weight: "800", size: 11 },
             align: "top",
-            offset: 2,
-            color: ctx => ctx.datasetIndex === 0 ? "#6ee7b7" : "transparent",
-            formatter: (v) => v > 0 ? formatCompactCurrency(v) : ""
+            anchor: "end",
+            offset: 5,
+            formatter: v => (v > 0 ? formatCompactCurrency(v) : "")
           },
           tooltip: {
             callbacks: {
-              afterLabel: (ctx) => {
+              afterLabel: ctx => {
                 const item = trend[ctx.dataIndex];
-                if (item && item.yoy_growth_revenue_pct !== null && ctx.datasetIndex === 0) {
+                if (item && item.yoy_growth_revenue_pct !== null) {
                   const s = item.yoy_growth_revenue_pct > 0 ? "+" : "";
                   return `YoY Growth vs ${item.py_label}: ${s}${item.yoy_growth_revenue_pct}%`;
                 }
@@ -1000,12 +1078,21 @@ function renderExecutiveRevenueTrendChart(trend, yoyByMonth, mode) {
         },
         scales: {
           y: {
-            grid: { color: "rgba(255,255,255,0.05)" },
-            ticks: { color: "#10b981", callback: v => "$" + (v / 1000) + "k" }
+            grid: { color: "rgba(255, 255, 255, 0.08)" },
+            ticks: {
+              color: "#34d399",
+              font: { family: "'Plus Jakarta Sans', sans-serif", weight: "600", size: 11 },
+              callback: v => "$" + v / 1000 + "k"
+            }
           },
           x: {
             grid: { display: false },
-            ticks: { color: "#94a3b8", maxRotation: 45, minRotation: 20 }
+            ticks: {
+              color: "#e2e8f0",
+              font: { family: "'Plus Jakarta Sans', sans-serif", weight: "600", size: 11 },
+              maxRotation: 45,
+              minRotation: 20
+            }
           }
         }
       }
@@ -1013,7 +1100,7 @@ function renderExecutiveRevenueTrendChart(trend, yoyByMonth, mode) {
   }
 }
 
-// Monthly Activations Historical Trend Chart (Req 1 & 3: New + Migrations = Total with YoY)
+// 2. Monthly Activations Historical Trend Chart (Req 1 & 3: New + Migrations = Total with High Visibility)
 function renderMonthlyActivationsChart(trend, yoyByMonth, mode) {
   const ctx = document.getElementById("chart-monthly-activations-trend");
   if (!ctx) return;
@@ -1021,8 +1108,8 @@ function renderMonthlyActivationsChart(trend, yoyByMonth, mode) {
 
   if (mode === "yoy") {
     const labels = yoyByMonth.map(m => m.month_name);
-    const data2025 = yoyByMonth.map(m => m.p2025 ? m.p2025.activations : null);
-    const data2026 = yoyByMonth.map(m => m.p2026 ? m.p2026.activations : null);
+    const data2025 = yoyByMonth.map(m => (m.p2025 ? m.p2025.activations : null));
+    const data2026 = yoyByMonth.map(m => (m.p2026 ? m.p2026.activations : null));
 
     charts.monthlyActivations = new Chart(ctx, {
       type: "bar",
@@ -1030,40 +1117,53 @@ function renderMonthlyActivationsChart(trend, yoyByMonth, mode) {
         labels: labels,
         datasets: [
           {
-            label: "2025 Total Activations",
+            label: "2025 Total Activations (Prior Year)",
             data: data2025,
-            backgroundColor: "rgba(245, 158, 11, 0.55)",
+            backgroundColor: "rgba(245, 158, 11, 0.35)",
             borderColor: "#f59e0b",
-            borderWidth: 1.5,
-            borderRadius: 4
+            borderWidth: 2,
+            borderRadius: 6
           },
           {
-            label: "2026 Total Activations",
+            label: "2026 Total Activations (Current Year)",
             data: data2026,
-            backgroundColor: "#a855f7",
-            borderColor: "#c084fc",
-            borderWidth: 1.5,
-            borderRadius: 4
+            backgroundColor: "#6366f1",
+            borderColor: "#818cf8",
+            borderWidth: 2,
+            borderRadius: 6
           }
         ]
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
-        layout: { padding: { top: 25 } },
+        layout: { padding: { top: 35, bottom: 5, left: 5, right: 10 } },
         plugins: {
-          legend: { labels: { color: "#94a3b8" } },
+          legend: {
+            labels: {
+              color: "#e2e8f0",
+              font: { family: "'Plus Jakarta Sans', sans-serif", weight: "600", size: 12 },
+              usePointStyle: true,
+              boxWidth: 8
+            }
+          },
           datalabels: {
             display: true,
-            font: { weight: "bold", size: 9 },
+            color: ctx => (ctx.datasetIndex === 0 ? "#fbbf24" : "#a5b4fc"),
+            backgroundColor: "rgba(15, 23, 42, 0.95)",
+            borderColor: ctx => (ctx.datasetIndex === 0 ? "#f59e0b" : "#6366f1"),
+            borderWidth: 1.5,
+            borderRadius: 6,
+            padding: { top: 3, bottom: 3, left: 6, right: 6 },
+            font: { family: "'Plus Jakarta Sans', sans-serif", weight: "800", size: 11 },
             align: "top",
-            offset: 2,
-            color: ctx => ctx.datasetIndex === 0 ? "#fbbf24" : "#d8b4fe",
-            formatter: v => v > 0 ? v : ""
+            anchor: "end",
+            offset: 5,
+            formatter: v => (v > 0 ? v : "")
           },
           tooltip: {
             callbacks: {
-              afterBody: (items) => {
+              afterBody: items => {
                 const idx = items[0].dataIndex;
                 const m = yoyByMonth[idx];
                 if (m && m.growth && m.growth.activations_pct !== null) {
@@ -1077,12 +1177,18 @@ function renderMonthlyActivationsChart(trend, yoyByMonth, mode) {
         },
         scales: {
           y: {
-            grid: { color: "rgba(255,255,255,0.05)" },
-            ticks: { color: "#94a3b8" }
+            grid: { color: "rgba(255, 255, 255, 0.08)" },
+            ticks: {
+              color: "#e2e8f0",
+              font: { family: "'Plus Jakarta Sans', sans-serif", weight: "600", size: 11 }
+            }
           },
           x: {
             grid: { display: false },
-            ticks: { color: "#94a3b8" }
+            ticks: {
+              color: "#e2e8f0",
+              font: { family: "'Plus Jakarta Sans', sans-serif", weight: "600", size: 11 }
+            }
           }
         }
       }
@@ -1092,7 +1198,6 @@ function renderMonthlyActivationsChart(trend, yoyByMonth, mode) {
     const totalActs = trend.map(t => t.activations_total);
     const newActs = trend.map(t => t.activations_new);
     const migrations = trend.map(t => t.activations_migrations);
-    const pyTotalActs = trend.map(t => t.py_activations || null);
 
     charts.monthlyActivations = new Chart(ctx, {
       type: "bar",
@@ -1102,41 +1207,36 @@ function renderMonthlyActivationsChart(trend, yoyByMonth, mode) {
           {
             label: "New Activations",
             data: newActs,
-            backgroundColor: "#a855f7",
+            backgroundColor: "#6366f1",
+            borderColor: "#818cf8",
+            borderWidth: 1,
             stack: "actStack",
             borderRadius: 4,
-            order: 3
+            order: 2
           },
           {
             label: "Migrations",
             data: migrations,
-            backgroundColor: "#06b6d4",
+            backgroundColor: "#0ea5e9",
+            borderColor: "#38bdf8",
+            borderWidth: 1,
             stack: "actStack",
             borderRadius: 4,
-            order: 3
+            order: 2
           },
           {
             label: "Total Activations (Act + Mig)",
             data: totalActs,
             type: "line",
-            borderColor: "#ec4899",
-            borderWidth: 2.5,
-            backgroundColor: "transparent",
-            pointBackgroundColor: "#ec4899",
-            pointRadius: 4,
-            tension: 0.3,
-            order: 2
-          },
-          {
-            label: "Prior Year Total (YoY Baseline)",
-            data: pyTotalActs,
-            type: "line",
             borderColor: "#f59e0b",
-            borderWidth: 2,
-            borderDash: [5, 4],
+            borderWidth: 3.5,
             backgroundColor: "transparent",
-            pointBackgroundColor: "#f59e0b",
+            pointBackgroundColor: "#ffffff",
+            pointBorderColor: "#f59e0b",
+            pointBorderWidth: 2,
             pointRadius: 5,
+            pointHoverRadius: 7,
+            tension: 0.3,
             order: 1
           }
         ]
@@ -1144,20 +1244,33 @@ function renderMonthlyActivationsChart(trend, yoyByMonth, mode) {
       options: {
         responsive: true,
         maintainAspectRatio: false,
-        layout: { padding: { top: 25 } },
+        layout: { padding: { top: 35, bottom: 5, left: 5, right: 10 } },
         plugins: {
-          legend: { labels: { color: "#94a3b8" } },
+          legend: {
+            labels: {
+              color: "#e2e8f0",
+              font: { family: "'Plus Jakarta Sans', sans-serif", weight: "600", size: 12 },
+              usePointStyle: true,
+              boxWidth: 8
+            }
+          },
           datalabels: {
-            display: true,
-            color: ctx => ctx.datasetIndex === 2 ? "#ffffff" : "transparent",
+            display: ctx => ctx.datasetIndex === 2,
+            color: "#fbbf24",
+            backgroundColor: "rgba(15, 23, 42, 0.95)",
+            borderColor: "#f59e0b",
+            borderWidth: 1.5,
+            borderRadius: 6,
+            padding: { top: 3, bottom: 3, left: 7, right: 7 },
+            font: { family: "'Plus Jakarta Sans', sans-serif", weight: "800", size: 11 },
             align: "top",
-            offset: 4,
-            font: { weight: "bold", size: 10 },
-            formatter: v => v > 0 ? v : ""
+            anchor: "end",
+            offset: 7,
+            formatter: v => (v > 0 ? v : "")
           },
           tooltip: {
             callbacks: {
-              afterLabel: (ctx) => {
+              afterLabel: ctx => {
                 const item = trend[ctx.dataIndex];
                 if (item && item.yoy_growth_activations_pct !== null && ctx.datasetIndex === 2) {
                   const s = item.yoy_growth_activations_pct > 0 ? "+" : "";
@@ -1170,12 +1283,20 @@ function renderMonthlyActivationsChart(trend, yoyByMonth, mode) {
         },
         scales: {
           y: {
-            grid: { color: "rgba(255,255,255,0.05)" },
-            ticks: { color: "#94a3b8" }
+            grid: { color: "rgba(255, 255, 255, 0.08)" },
+            ticks: {
+              color: "#e2e8f0",
+              font: { family: "'Plus Jakarta Sans', sans-serif", weight: "600", size: 11 }
+            }
           },
           x: {
             grid: { display: false },
-            ticks: { color: "#94a3b8", maxRotation: 45, minRotation: 20 }
+            ticks: {
+              color: "#e2e8f0",
+              font: { family: "'Plus Jakarta Sans', sans-serif", weight: "600", size: 11 },
+              maxRotation: 45,
+              minRotation: 20
+            }
           }
         }
       }
@@ -1183,7 +1304,7 @@ function renderMonthlyActivationsChart(trend, yoyByMonth, mode) {
   }
 }
 
-// Monthly CPO Historical Trend Chart (Units & Revenue with YoY)
+// 3. Monthly CPO Historical Trend Chart (Units & Revenue with High Visibility)
 function renderMonthlyCPOChart(trend, yoyByMonth, mode) {
   const ctx = document.getElementById("chart-monthly-cpo-trend");
   if (!ctx) return;
@@ -1191,8 +1312,8 @@ function renderMonthlyCPOChart(trend, yoyByMonth, mode) {
 
   if (mode === "yoy") {
     const labels = yoyByMonth.map(m => m.month_name);
-    const data2025 = yoyByMonth.map(m => m.p2025 ? m.p2025.cpo_units : null);
-    const data2026 = yoyByMonth.map(m => m.p2026 ? m.p2026.cpo_units : null);
+    const data2025 = yoyByMonth.map(m => (m.p2025 ? m.p2025.cpo_units : null));
+    const data2026 = yoyByMonth.map(m => (m.p2026 ? m.p2026.cpo_units : null));
 
     charts.monthlyCPO = new Chart(ctx, {
       type: "bar",
@@ -1202,38 +1323,51 @@ function renderMonthlyCPOChart(trend, yoyByMonth, mode) {
           {
             label: "2025 CPO Units (Prior Year)",
             data: data2025,
-            backgroundColor: "rgba(245, 158, 11, 0.55)",
+            backgroundColor: "rgba(245, 158, 11, 0.35)",
             borderColor: "#f59e0b",
-            borderWidth: 1.5,
-            borderRadius: 4
+            borderWidth: 2,
+            borderRadius: 6
           },
           {
             label: "2026 CPO Units (Current Year)",
             data: data2026,
             backgroundColor: "#10b981",
             borderColor: "#34d399",
-            borderWidth: 1.5,
-            borderRadius: 4
+            borderWidth: 2,
+            borderRadius: 6
           }
         ]
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
-        layout: { padding: { top: 25 } },
+        layout: { padding: { top: 35, bottom: 5, left: 5, right: 10 } },
         plugins: {
-          legend: { labels: { color: "#94a3b8" } },
+          legend: {
+            labels: {
+              color: "#e2e8f0",
+              font: { family: "'Plus Jakarta Sans', sans-serif", weight: "600", size: 12 },
+              usePointStyle: true,
+              boxWidth: 8
+            }
+          },
           datalabels: {
             display: true,
-            font: { weight: "bold", size: 9 },
+            color: ctx => (ctx.datasetIndex === 0 ? "#fbbf24" : "#34d399"),
+            backgroundColor: "rgba(15, 23, 42, 0.95)",
+            borderColor: ctx => (ctx.datasetIndex === 0 ? "#f59e0b" : "#10b981"),
+            borderWidth: 1.5,
+            borderRadius: 6,
+            padding: { top: 3, bottom: 3, left: 6, right: 6 },
+            font: { family: "'Plus Jakarta Sans', sans-serif", weight: "800", size: 11 },
             align: "top",
-            offset: 2,
-            color: ctx => ctx.datasetIndex === 0 ? "#fbbf24" : "#6ee7b7",
-            formatter: v => v > 0 ? v : ""
+            anchor: "end",
+            offset: 5,
+            formatter: v => (v > 0 ? v : "")
           },
           tooltip: {
             callbacks: {
-              afterBody: (items) => {
+              afterBody: items => {
                 const idx = items[0].dataIndex;
                 const m = yoyByMonth[idx];
                 if (m && m.growth && m.growth.cpo_pct !== null) {
@@ -1247,12 +1381,18 @@ function renderMonthlyCPOChart(trend, yoyByMonth, mode) {
         },
         scales: {
           y: {
-            grid: { color: "rgba(255,255,255,0.05)" },
-            ticks: { color: "#10b981" }
+            grid: { color: "rgba(255, 255, 255, 0.08)" },
+            ticks: {
+              color: "#34d399",
+              font: { family: "'Plus Jakarta Sans', sans-serif", weight: "600", size: 11 }
+            }
           },
           x: {
             grid: { display: false },
-            ticks: { color: "#94a3b8" }
+            ticks: {
+              color: "#e2e8f0",
+              font: { family: "'Plus Jakarta Sans', sans-serif", weight: "600", size: 11 }
+            }
           }
         }
       }
@@ -1261,7 +1401,6 @@ function renderMonthlyCPOChart(trend, yoyByMonth, mode) {
     const labels = trend.map(t => t.label);
     const units = trend.map(t => t.cpo_units_actual);
     const revenues = trend.map(t => t.cpo_revenue_actual);
-    const pyUnits = trend.map(t => t.py_cpo_units || null);
 
     charts.monthlyCPO = new Chart(ctx, {
       type: "bar",
@@ -1272,55 +1411,60 @@ function renderMonthlyCPOChart(trend, yoyByMonth, mode) {
             label: "CPO Units Sold",
             data: units,
             backgroundColor: "#10b981",
+            borderColor: "#34d399",
+            borderWidth: 1.5,
             borderRadius: 6,
             yAxisID: "y",
             order: 2
-          },
-          {
-            label: "Prior Year CPO Units (YoY)",
-            data: pyUnits,
-            type: "line",
-            borderColor: "#f59e0b",
-            borderWidth: 2,
-            borderDash: [5, 4],
-            backgroundColor: "transparent",
-            pointBackgroundColor: "#f59e0b",
-            pointRadius: 5,
-            yAxisID: "y",
-            order: 1
           },
           {
             label: "CPO Revenue ($)",
             data: revenues,
             type: "line",
             borderColor: "#06b6d4",
+            borderWidth: 3,
             backgroundColor: "transparent",
-            borderWidth: 2,
-            pointBackgroundColor: "#06b6d4",
+            pointBackgroundColor: "#ffffff",
+            pointBorderColor: "#06b6d4",
+            pointBorderWidth: 2,
             pointRadius: 4,
             tension: 0.3,
             yAxisID: "y1",
-            order: 3
+            order: 1
           }
         ]
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
-        layout: { padding: { top: 25 } },
+        layout: { padding: { top: 35, bottom: 5, left: 5, right: 10 } },
         plugins: {
-          legend: { labels: { color: "#94a3b8" } },
+          legend: {
+            labels: {
+              color: "#e2e8f0",
+              font: { family: "'Plus Jakarta Sans', sans-serif", weight: "600", size: 12 },
+              usePointStyle: true,
+              boxWidth: 8
+            }
+          },
           datalabels: {
             display: true,
-            font: { weight: "bold", size: 9 },
+            color: ctx => (ctx.datasetIndex === 0 ? "#34d399" : "#22d3ee"),
+            backgroundColor: "rgba(15, 23, 42, 0.95)",
+            borderColor: ctx => (ctx.datasetIndex === 0 ? "#10b981" : "#06b6d4"),
+            borderWidth: 1.5,
+            borderRadius: 6,
+            padding: { top: 3, bottom: 3, left: 6, right: 6 },
+            font: { family: "'Plus Jakarta Sans', sans-serif", weight: "800", size: 11 },
             align: "top",
-            offset: 3,
-            color: ctx => ctx.datasetIndex === 0 ? "#6ee7b7" : (ctx.datasetIndex === 2 ? "#67e8f9" : "transparent"),
-            formatter: (v, ctx) => ctx.datasetIndex === 0 ? (v > 0 ? v : "") : (ctx.datasetIndex === 2 && v > 0 ? formatCompactCurrency(v) : "")
+            anchor: "end",
+            offset: 5,
+            formatter: (v, ctx) =>
+              ctx.datasetIndex === 0 ? (v > 0 ? v : "") : v > 0 ? formatCompactCurrency(v) : ""
           },
           tooltip: {
             callbacks: {
-              afterLabel: (ctx) => {
+              afterLabel: ctx => {
                 const item = trend[ctx.dataIndex];
                 if (item && item.yoy_growth_cpo_pct !== null && ctx.datasetIndex === 0) {
                   const s = item.yoy_growth_cpo_pct > 0 ? "+" : "";
@@ -1335,18 +1479,30 @@ function renderMonthlyCPOChart(trend, yoyByMonth, mode) {
           y: {
             type: "linear",
             position: "left",
-            grid: { color: "rgba(255,255,255,0.05)" },
-            ticks: { color: "#10b981" }
+            grid: { color: "rgba(255, 255, 255, 0.08)" },
+            ticks: {
+              color: "#34d399",
+              font: { family: "'Plus Jakarta Sans', sans-serif", weight: "600", size: 11 }
+            }
           },
           y1: {
             type: "linear",
             position: "right",
             grid: { display: false },
-            ticks: { color: "#06b6d4", callback: v => "$" + (v / 1000) + "k" }
+            ticks: {
+              color: "#22d3ee",
+              font: { family: "'Plus Jakarta Sans', sans-serif", weight: "600", size: 11 },
+              callback: v => "$" + v / 1000 + "k"
+            }
           },
           x: {
             grid: { display: false },
-            ticks: { color: "#94a3b8", maxRotation: 45, minRotation: 20 }
+            ticks: {
+              color: "#e2e8f0",
+              font: { family: "'Plus Jakarta Sans', sans-serif", weight: "600", size: 11 },
+              maxRotation: 45,
+              minRotation: 20
+            }
           }
         }
       }
@@ -1354,7 +1510,7 @@ function renderMonthlyCPOChart(trend, yoyByMonth, mode) {
   }
 }
 
-// Monthly Repairs Historical Trend Chart (OOW vs Insurance & Revenue with YoY)
+// 4. Monthly Repairs Historical Trend Chart (OOW vs Insurance & Revenue with High Visibility)
 function renderMonthlyRepairsChart(trend, yoyByMonth, mode) {
   const ctx = document.getElementById("chart-monthly-repairs-trend");
   if (!ctx) return;
@@ -1362,8 +1518,8 @@ function renderMonthlyRepairsChart(trend, yoyByMonth, mode) {
 
   if (mode === "yoy") {
     const labels = yoyByMonth.map(m => m.month_name);
-    const data2025 = yoyByMonth.map(m => m.p2025 ? m.p2025.repairs_volume : null);
-    const data2026 = yoyByMonth.map(m => m.p2026 ? m.p2026.repairs_volume : null);
+    const data2025 = yoyByMonth.map(m => (m.p2025 ? m.p2025.repairs_volume : null));
+    const data2026 = yoyByMonth.map(m => (m.p2026 ? m.p2026.repairs_volume : null));
 
     charts.monthlyRepairs = new Chart(ctx, {
       type: "bar",
@@ -1373,38 +1529,51 @@ function renderMonthlyRepairsChart(trend, yoyByMonth, mode) {
           {
             label: "2025 Total Repairs (Prior Year)",
             data: data2025,
-            backgroundColor: "rgba(244, 63, 94, 0.55)",
-            borderColor: "#f43f5e",
-            borderWidth: 1.5,
-            borderRadius: 4
+            backgroundColor: "rgba(245, 158, 11, 0.35)",
+            borderColor: "#f59e0b",
+            borderWidth: 2,
+            borderRadius: 6
           },
           {
             label: "2026 Total Repairs (Current Year)",
             data: data2026,
-            backgroundColor: "#06b6d4",
-            borderColor: "#22d3ee",
-            borderWidth: 1.5,
-            borderRadius: 4
+            backgroundColor: "#14b8a6",
+            borderColor: "#2dd4bf",
+            borderWidth: 2,
+            borderRadius: 6
           }
         ]
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
-        layout: { padding: { top: 25 } },
+        layout: { padding: { top: 35, bottom: 5, left: 5, right: 10 } },
         plugins: {
-          legend: { labels: { color: "#94a3b8" } },
+          legend: {
+            labels: {
+              color: "#e2e8f0",
+              font: { family: "'Plus Jakarta Sans', sans-serif", weight: "600", size: 12 },
+              usePointStyle: true,
+              boxWidth: 8
+            }
+          },
           datalabels: {
             display: true,
-            font: { weight: "bold", size: 9 },
+            color: ctx => (ctx.datasetIndex === 0 ? "#fbbf24" : "#2dd4bf"),
+            backgroundColor: "rgba(15, 23, 42, 0.95)",
+            borderColor: ctx => (ctx.datasetIndex === 0 ? "#f59e0b" : "#14b8a6"),
+            borderWidth: 1.5,
+            borderRadius: 6,
+            padding: { top: 3, bottom: 3, left: 6, right: 6 },
+            font: { family: "'Plus Jakarta Sans', sans-serif", weight: "800", size: 11 },
             align: "top",
-            offset: 2,
-            color: ctx => ctx.datasetIndex === 0 ? "#fda4af" : "#67e8f9",
-            formatter: v => v > 0 ? v : ""
+            anchor: "end",
+            offset: 5,
+            formatter: v => (v > 0 ? v : "")
           },
           tooltip: {
             callbacks: {
-              afterBody: (items) => {
+              afterBody: items => {
                 const idx = items[0].dataIndex;
                 const m = yoyByMonth[idx];
                 if (m && m.growth && m.growth.repairs_pct !== null) {
@@ -1418,12 +1587,18 @@ function renderMonthlyRepairsChart(trend, yoyByMonth, mode) {
         },
         scales: {
           y: {
-            grid: { color: "rgba(255,255,255,0.05)" },
-            ticks: { color: "#06b6d4" }
+            grid: { color: "rgba(255, 255, 255, 0.08)" },
+            ticks: {
+              color: "#2dd4bf",
+              font: { family: "'Plus Jakarta Sans', sans-serif", weight: "600", size: 11 }
+            }
           },
           x: {
             grid: { display: false },
-            ticks: { color: "#94a3b8" }
+            ticks: {
+              color: "#e2e8f0",
+              font: { family: "'Plus Jakarta Sans', sans-serif", weight: "600", size: 11 }
+            }
           }
         }
       }
@@ -1433,7 +1608,6 @@ function renderMonthlyRepairsChart(trend, yoyByMonth, mode) {
     const oow = trend.map(t => t.repairs_oow_volume);
     const ins = trend.map(t => t.repairs_insurance_volume);
     const revenues = trend.map(t => t.repairs_total_revenue);
-    const pyTotalRep = trend.map(t => t.py_repairs_volume || null);
 
     charts.monthlyRepairs = new Chart(ctx, {
       type: "bar",
@@ -1444,67 +1618,77 @@ function renderMonthlyRepairsChart(trend, yoyByMonth, mode) {
             label: "Out of Warranty (OOW)",
             data: oow,
             backgroundColor: "#f59e0b",
+            borderColor: "#fbbf24",
+            borderWidth: 1,
             stack: "repStack",
             borderRadius: 4,
             yAxisID: "y",
-            order: 3
+            order: 2
           },
           {
             label: "Insurance Repairs",
             data: ins,
-            backgroundColor: "#06b6d4",
+            backgroundColor: "#14b8a6",
+            borderColor: "#2dd4bf",
+            borderWidth: 1,
             stack: "repStack",
             borderRadius: 4,
             yAxisID: "y",
-            order: 3
-          },
-          {
-            label: "Prior Year Total Repairs (YoY)",
-            data: pyTotalRep,
-            type: "line",
-            borderColor: "#f43f5e",
-            borderWidth: 2,
-            borderDash: [5, 4],
-            backgroundColor: "transparent",
-            pointBackgroundColor: "#f43f5e",
-            pointRadius: 5,
-            yAxisID: "y",
-            order: 1
+            order: 2
           },
           {
             label: "Total Repair Revenue ($)",
             data: revenues,
             type: "line",
             borderColor: "#3b82f6",
-            borderWidth: 2.5,
+            borderWidth: 3,
             backgroundColor: "transparent",
-            pointBackgroundColor: "#3b82f6",
+            pointBackgroundColor: "#ffffff",
+            pointBorderColor: "#3b82f6",
+            pointBorderWidth: 2,
             pointRadius: 4,
             tension: 0.3,
             yAxisID: "y1",
-            order: 2
+            order: 1
           }
         ]
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
-        layout: { padding: { top: 25 } },
+        layout: { padding: { top: 35, bottom: 5, left: 5, right: 10 } },
         plugins: {
-          legend: { labels: { color: "#94a3b8" } },
+          legend: {
+            labels: {
+              color: "#e2e8f0",
+              font: { family: "'Plus Jakarta Sans', sans-serif", weight: "600", size: 12 },
+              usePointStyle: true,
+              boxWidth: 8
+            }
+          },
           datalabels: {
-            display: true,
-            color: ctx => ctx.datasetIndex === 3 ? "#93c5fd" : "transparent",
+            display: ctx => ctx.datasetIndex === 2,
+            color: "#60a5fa",
+            backgroundColor: "rgba(15, 23, 42, 0.95)",
+            borderColor: "#3b82f6",
+            borderWidth: 1.5,
+            borderRadius: 6,
+            padding: { top: 3, bottom: 3, left: 6, right: 6 },
+            font: { family: "'Plus Jakarta Sans', sans-serif", weight: "800", size: 11 },
             align: "top",
-            offset: 4,
-            font: { weight: "bold", size: 9 },
-            formatter: (v, ctx) => ctx.datasetIndex === 3 && v > 0 ? formatCompactCurrency(v) : ""
+            anchor: "end",
+            offset: 5,
+            formatter: (v, ctx) => (ctx.datasetIndex === 2 && v > 0 ? formatCompactCurrency(v) : "")
           },
           tooltip: {
             callbacks: {
-              afterLabel: (ctx) => {
+              afterLabel: ctx => {
                 const item = trend[ctx.dataIndex];
-                if (item && item.yoy_growth_repairs_pct !== null && (ctx.datasetIndex === 0 || ctx.datasetIndex === 1)) {
+                if (
+                  item &&
+                  item.yoy_growth_repairs_pct !== null &&
+                  (ctx.datasetIndex === 0 || ctx.datasetIndex === 1)
+                ) {
                   const s = item.yoy_growth_repairs_pct > 0 ? "+" : "";
                   return `YoY Growth vs ${item.py_label}: ${s}${item.yoy_growth_repairs_pct}%`;
                 }
@@ -1517,18 +1701,30 @@ function renderMonthlyRepairsChart(trend, yoyByMonth, mode) {
           y: {
             type: "linear",
             position: "left",
-            grid: { color: "rgba(255,255,255,0.05)" },
-            ticks: { color: "#f59e0b" }
+            grid: { color: "rgba(255, 255, 255, 0.08)" },
+            ticks: {
+              color: "#fbbf24",
+              font: { family: "'Plus Jakarta Sans', sans-serif", weight: "600", size: 11 }
+            }
           },
           y1: {
             type: "linear",
             position: "right",
             grid: { display: false },
-            ticks: { color: "#3b82f6", callback: v => "$" + (v / 1000) + "k" }
+            ticks: {
+              color: "#60a5fa",
+              font: { family: "'Plus Jakarta Sans', sans-serif", weight: "600", size: 11 },
+              callback: v => "$" + v / 1000 + "k"
+            }
           },
           x: {
             grid: { display: false },
-            ticks: { color: "#94a3b8", maxRotation: 45, minRotation: 20 }
+            ticks: {
+              color: "#e2e8f0",
+              font: { family: "'Plus Jakarta Sans', sans-serif", weight: "600", size: 11 },
+              maxRotation: 45,
+              minRotation: 20
+            }
           }
         }
       }
@@ -1536,7 +1732,7 @@ function renderMonthlyRepairsChart(trend, yoyByMonth, mode) {
   }
 }
 
-// Monthly Foot Traffic & Conversion Rate Historical Trend Chart (with YoY)
+// 5. Monthly Foot Traffic & Conversion Rate Historical Trend Chart (with High Visibility)
 function renderMonthlyTrafficChart(trend, yoyByMonth, mode) {
   const ctx = document.getElementById("chart-monthly-traffic-trend");
   if (!ctx) return;
@@ -1544,8 +1740,8 @@ function renderMonthlyTrafficChart(trend, yoyByMonth, mode) {
 
   if (mode === "yoy") {
     const labels = yoyByMonth.map(m => m.month_name);
-    const data2025 = yoyByMonth.map(m => m.p2025 ? m.p2025.traffic : null);
-    const data2026 = yoyByMonth.map(m => m.p2026 ? m.p2026.traffic : null);
+    const data2025 = yoyByMonth.map(m => (m.p2025 ? m.p2025.traffic : null));
+    const data2026 = yoyByMonth.map(m => (m.p2026 ? m.p2026.traffic : null));
 
     charts.monthlyTraffic = new Chart(ctx, {
       type: "bar",
@@ -1555,38 +1751,51 @@ function renderMonthlyTrafficChart(trend, yoyByMonth, mode) {
           {
             label: "2025 Door Traffic (Prior Year)",
             data: data2025,
-            backgroundColor: "rgba(245, 158, 11, 0.55)",
+            backgroundColor: "rgba(245, 158, 11, 0.35)",
             borderColor: "#f59e0b",
-            borderWidth: 1.5,
-            borderRadius: 4
+            borderWidth: 2,
+            borderRadius: 6
           },
           {
             label: "2026 Door Traffic (Current Year)",
             data: data2026,
             backgroundColor: "rgba(244, 63, 94, 0.75)",
-            borderColor: "#f43f5e",
-            borderWidth: 1.5,
-            borderRadius: 4
+            borderColor: "#fb7185",
+            borderWidth: 2,
+            borderRadius: 6
           }
         ]
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
-        layout: { padding: { top: 25 } },
+        layout: { padding: { top: 35, bottom: 5, left: 5, right: 10 } },
         plugins: {
-          legend: { labels: { color: "#94a3b8" } },
+          legend: {
+            labels: {
+              color: "#e2e8f0",
+              font: { family: "'Plus Jakarta Sans', sans-serif", weight: "600", size: 12 },
+              usePointStyle: true,
+              boxWidth: 8
+            }
+          },
           datalabels: {
             display: true,
-            font: { weight: "bold", size: 8 },
+            color: ctx => (ctx.datasetIndex === 0 ? "#fbbf24" : "#fb7185"),
+            backgroundColor: "rgba(15, 23, 42, 0.95)",
+            borderColor: ctx => (ctx.datasetIndex === 0 ? "#f59e0b" : "#f43f5e"),
+            borderWidth: 1.5,
+            borderRadius: 6,
+            padding: { top: 3, bottom: 3, left: 6, right: 6 },
+            font: { family: "'Plus Jakarta Sans', sans-serif", weight: "800", size: 11 },
             align: "top",
-            offset: 2,
-            color: ctx => ctx.datasetIndex === 0 ? "#fbbf24" : "#fda4af",
-            formatter: v => v > 0 ? (v >= 1000 ? (v / 1000).toFixed(0) + "k" : v) : ""
+            anchor: "end",
+            offset: 5,
+            formatter: v => (v > 0 ? (v >= 1000 ? (v / 1000).toFixed(0) + "k" : v) : "")
           },
           tooltip: {
             callbacks: {
-              afterBody: (items) => {
+              afterBody: items => {
                 const idx = items[0].dataIndex;
                 const m = yoyByMonth[idx];
                 if (m && m.growth && m.growth.traffic_pct !== null) {
@@ -1600,12 +1809,19 @@ function renderMonthlyTrafficChart(trend, yoyByMonth, mode) {
         },
         scales: {
           y: {
-            grid: { color: "rgba(255,255,255,0.05)" },
-            ticks: { color: "#f43f5e", callback: v => (v >= 1000 ? (v / 1000).toFixed(0) + "k" : v) }
+            grid: { color: "rgba(255, 255, 255, 0.08)" },
+            ticks: {
+              color: "#fb7185",
+              font: { family: "'Plus Jakarta Sans', sans-serif", weight: "600", size: 11 },
+              callback: v => (v >= 1000 ? (v / 1000).toFixed(0) + "k" : v)
+            }
           },
           x: {
             grid: { display: false },
-            ticks: { color: "#94a3b8" }
+            ticks: {
+              color: "#e2e8f0",
+              font: { family: "'Plus Jakarta Sans', sans-serif", weight: "600", size: 11 }
+            }
           }
         }
       }
@@ -1614,7 +1830,6 @@ function renderMonthlyTrafficChart(trend, yoyByMonth, mode) {
     const labels = trend.map(t => t.label);
     const traffic = trend.map(t => t.foot_traffic_total);
     const convRates = trend.map(t => t.conversion_rate_pct);
-    const pyTraffic = trend.map(t => t.py_traffic || null);
 
     charts.monthlyTraffic = new Chart(ctx, {
       type: "bar",
@@ -1626,23 +1841,10 @@ function renderMonthlyTrafficChart(trend, yoyByMonth, mode) {
             data: traffic,
             backgroundColor: "rgba(244, 63, 94, 0.65)",
             borderColor: "#f43f5e",
-            borderWidth: 1,
+            borderWidth: 1.5,
             borderRadius: 6,
             yAxisID: "y",
             order: 2
-          },
-          {
-            label: "Prior Year Door Traffic (YoY)",
-            data: pyTraffic,
-            type: "line",
-            borderColor: "#f59e0b",
-            borderWidth: 2,
-            borderDash: [5, 4],
-            backgroundColor: "transparent",
-            pointBackgroundColor: "#f59e0b",
-            pointRadius: 5,
-            yAxisID: "y",
-            order: 1
           },
           {
             label: "Conversion Rate (%)",
@@ -1650,32 +1852,48 @@ function renderMonthlyTrafficChart(trend, yoyByMonth, mode) {
             type: "line",
             borderColor: "#10b981",
             backgroundColor: "transparent",
-            borderWidth: 2.5,
-            pointBackgroundColor: "#10b981",
+            borderWidth: 3,
+            pointBackgroundColor: "#ffffff",
+            pointBorderColor: "#10b981",
+            pointBorderWidth: 2,
             pointRadius: 4,
             tension: 0.3,
             yAxisID: "y1",
-            order: 3
+            order: 1
           }
         ]
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
-        layout: { padding: { top: 25 } },
+        layout: { padding: { top: 35, bottom: 5, left: 5, right: 10 } },
         plugins: {
-          legend: { labels: { color: "#94a3b8" } },
+          legend: {
+            labels: {
+              color: "#e2e8f0",
+              font: { family: "'Plus Jakarta Sans', sans-serif", weight: "600", size: 12 },
+              usePointStyle: true,
+              boxWidth: 8
+            }
+          },
           datalabels: {
             display: true,
-            font: { weight: "bold", size: 9 },
+            color: ctx => (ctx.datasetIndex === 0 ? "#fb7185" : "#34d399"),
+            backgroundColor: "rgba(15, 23, 42, 0.95)",
+            borderColor: ctx => (ctx.datasetIndex === 0 ? "#f43f5e" : "#10b981"),
+            borderWidth: 1.5,
+            borderRadius: 6,
+            padding: { top: 3, bottom: 3, left: 6, right: 6 },
+            font: { family: "'Plus Jakarta Sans', sans-serif", weight: "800", size: 11 },
             align: "top",
-            offset: 3,
-            color: ctx => ctx.datasetIndex === 0 ? "#fda4af" : (ctx.datasetIndex === 2 ? "#6ee7b7" : "transparent"),
-            formatter: (v, ctx) => ctx.datasetIndex === 0 ? (v > 0 ? formatNumber(v) : "") : (ctx.datasetIndex === 2 && v > 0 ? v + "%" : "")
+            anchor: "end",
+            offset: 5,
+            formatter: (v, ctx) =>
+              ctx.datasetIndex === 0 ? (v > 0 ? formatNumber(v) : "") : v > 0 ? v + "%" : ""
           },
           tooltip: {
             callbacks: {
-              afterLabel: (ctx) => {
+              afterLabel: ctx => {
                 const item = trend[ctx.dataIndex];
                 if (item && item.yoy_growth_traffic_pct !== null && ctx.datasetIndex === 0) {
                   const s = item.yoy_growth_traffic_pct > 0 ? "+" : "";
@@ -1690,18 +1908,31 @@ function renderMonthlyTrafficChart(trend, yoyByMonth, mode) {
           y: {
             type: "linear",
             position: "left",
-            grid: { color: "rgba(255,255,255,0.05)" },
-            ticks: { color: "#f43f5e", callback: v => (v >= 1000 ? (v / 1000).toFixed(0) + "k" : v) }
+            grid: { color: "rgba(255, 255, 255, 0.08)" },
+            ticks: {
+              color: "#fb7185",
+              font: { family: "'Plus Jakarta Sans', sans-serif", weight: "600", size: 11 },
+              callback: v => (v >= 1000 ? (v / 1000).toFixed(0) + "k" : v)
+            }
           },
           y1: {
             type: "linear",
             position: "right",
             grid: { display: false },
-            ticks: { color: "#10b981", callback: v => v + "%" }
+            ticks: {
+              color: "#34d399",
+              font: { family: "'Plus Jakarta Sans', sans-serif", weight: "600", size: 11 },
+              callback: v => v + "%"
+            }
           },
           x: {
             grid: { display: false },
-            ticks: { color: "#94a3b8", maxRotation: 45, minRotation: 20 }
+            ticks: {
+              color: "#e2e8f0",
+              font: { family: "'Plus Jakarta Sans', sans-serif", weight: "600", size: 11 },
+              maxRotation: 45,
+              minRotation: 20
+            }
           }
         }
       }

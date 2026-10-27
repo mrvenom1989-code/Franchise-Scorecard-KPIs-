@@ -220,3 +220,24 @@ Server runs at `http://127.0.0.1:5001`.
 | **Supabase PostgreSQL** | Active | `amjzomlovbuwjneqnumv.supabase.co` (85 locations, 528 monthly KPIs, 15 periods) |
 | **Total Activations Rule** | Active | Enforced in ETL, database (110 rows synced), REST API, and frontend |
 | **Tab Nomenclature** | Active | `Activations`, `CPO`, `Repairs` deployed across templates and controllers |
+| **Chart Visibility & Labels** | Active | Glassmorphic pill badge data labels, bright `#e2e8f0` ticks, tri-tone palettes |
+| **YoY Timeline Architecture**| Active | Clean 14-Mo trend + side-by-side YoY (2025 vs 2026) mode with tracking badge |
+
+---
+
+## 9. Recent Enhancements: YoY Timeline & High-Legibility Visualization
+
+1. **Clarification on Historical Data Availability**:
+   * Direct verification of corporate source workbook `Updated Franchise Scorecard - Oct MTD EOD - 10-25-26.xlsx` confirmed that corporate began franchise network tracking in **September 2025**. Months Jan–Aug 2025 were never recorded by corporate.
+   * Consequently, prior-year comparisons only exist for matching months Sept & Oct.
+   * Removed the disconnected 2-point floating yellow baseline from the continuous 14-month view to eliminate user confusion (which looked like broken or missing data for Jan–Aug 2026).
+   * Exact YoY growth is surfaced in hover tooltips (`YoY Growth vs Sept 2025: +411.3%`, `YoY Growth vs Oct 2025: +149.4%`) and top-right header badges.
+   * Dedicated side-by-side annual comparison is available via the `[YoY (2025 vs 2026)]` switcher button.
+   * Added an informational note badge under all charts explaining corporate historical tracking origins.
+
+2. **High-Visibility Badge Pill Data Labels**:
+   * Overhauled all data labels into executive pill badges with solid dark backdrops (`rgba(15, 23, 42, 0.95)`), 1.5px colored borders matching each metric, 11px bold typography, and padding.
+   * Numbers never blend into dark backgrounds, lines, or bars.
+   * Brightened all X-axis ticks to `#e2e8f0` (Slate 200, weight 600) and card subtitles to `#cbd5e1`.
+   * Upgraded Activations color palette: New Activations (Indigo Blue `#6366f1`), Migrations (Sky Cyan `#0ea5e9`), Total Activations Line (Glowing Amber Gold `#f59e0b`, 3.5px line width with white/gold points).
+

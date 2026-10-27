@@ -256,18 +256,40 @@ This document records architectural insights, data anomalies, API quirks, and te
 
 ## 11. Year-on-Year (YoY) Visual Analytics & Dual-Mode Horizon Architecture
 
-### The Spatial Disconnect in Multi-Year Historical Timelines
-*   **The Problem**: Displaying a 14-month continuous timeline spreads seasonal pairs (e.g. `Sept 2025` vs `Sept 26`, `Oct 2025` vs `Oct 26 MTD`) far apart on opposite ends of the X-axis. Users cannot visually assess growth velocity or seasonal patterns without manually tracking data points across the canvas.
+### The Spatial Disconnect in Multi-Year Historical Timelines & The 2-Dot Floating Segment Trap
+*   **The Problem**: In corporate's franchise scorecard system, historical tracking originated in **September 2025**. Corporate files never recorded data for January through August 2025. When plotting a continuous 14-month timeline, attempting to overlay a prior-year baseline resulted in 12 null values followed by an isolated 2-point dashed yellow segment on the far right (at `Sept 26` and `Oct 26 MTD`). This caused user confusion:
+    1.  It looked like a broken line or missing data for Jan–Aug 2026.
+    2.  The prior-year baseline numbers (`141` for Sept 2025 and `156` for Oct 2025) were already displayed as actual bars on the far left of the timeline!
 *   **The Solution**:
-    1.  **Prior Year Baseline Dataset (Timeline View)**:
-        *   In `routes/api.py`, every period in `/api/monthly-trend` identifies its matching prior-year month (`i_year - 1`, same `i_month`) and attaches `py_revenue`, `py_activations`, `py_cpo_units`, `py_repairs_volume`, and `py_traffic`.
-        *   Chart.js renders an amber dashed baseline overlaying the continuous 14-month trend, making YoY comparisons visible directly in chronological context.
-    2.  **Calendar Month Overlay Mode (12-Month Aligned View)**:
-        *   An interactive button group (`[14-Mo Trend]` vs `[YoY (2025 vs 2026)]`) switches the X-axis to 12 calendar months (Jan–Dec).
-        *   Plots 2025 (Prior Year) vs 2026 (Current Year) side-by-side as dual bar/line datasets, with tooltip callbacks surfacing exact YoY percentage growth.
-    3.  **Executive Growth Velocity Matrix**:
-        *   Placed directly below the primary KPI cards on the Executive Pulse tab.
-        *   Presents a 6-pillar comparison matrix (Revenue, Activations, CPO, Repairs, Traffic, Conversion) displaying Current, MoM, and YoY numbers simultaneously, ensuring immediate visibility upon login.
+    1.  **Streamlined Timeline Architecture**:
+        *   Removed the disconnected 2-point floating baseline from the 14-month continuous timeline view. The timeline view now cleanly renders actual historical volume (`New Activations + Migrations = Total`).
+        *   Surfaced exact YoY growth deltas in hover tooltips (`YoY Growth vs Sept 2025: +411.3%`, `YoY Growth vs Oct 2025: +149.4%`) and in the top-right header badges.
+    2.  **Dedicated Dual-Mode Horizon**:
+        *   Clicking `[YoY (2025 vs 2026)]` switches the canvas to calendar-month alignment, plotting 2025 vs 2026 side-by-side for matching months.
+        *   Added a prominent `.chart-info-note` under all charts: *"Corporate scorecard history began in Sept 2025. Prior months (Jan–Aug 2025) were not tracked in corporate files. Toggle to YoY (2025 vs 2026) for side-by-side annual comparison."*
+
+---
+
+## 12. Chart Readability & High-Contrast Visual Engineering
+
+### The "Washed Out / Blended Numbers" Phenomenon on Dark Dashboards
+*   **The Issue**: Bare text data labels (`color: "#ffffff"`, `size: 9`) rendered directly over colored bars, lines, or gridlines blend into the visual noise of dark themes (`#0b0f19`), becoming unreadable. Furthermore, line graphs overlapping stacked bar charts (e.g. pink total activation lines over violet new activation bars) cause color clashing.
+*   **The Fix**:
+    1.  **Glassmorphic Pill Badge Datalabels (`makePillDataLabel`)**:
+        *   Every key data point is enclosed in an executive solid pill badge: `backgroundColor: "rgba(15, 23, 42, 0.95)"`, `borderColor: "..."` (1.5px matching metric color), `borderRadius: 6`, `padding: 3px 6px`, and `font: { weight: "800", size: 11 }`.
+        *   The dark pill backdrop creates a permanent barrier that blocks out underlying bars and gridlines, guaranteeing 100% legibility on any background.
+        *   Configured `layout: { padding: { top: 35 } }` so numbers never clip at the top canvas boundary.
+    2.  **Harmonized Tri-Tone Color Palette**:
+        *   *Activations*: New Activations (Indigo Blue `#6366f1`), Migrations (Sky Cyan `#0ea5e9`), Total Activations Line (Glowing Amber Gold `#f59e0b`, 3.5px line with `#ffffff` point center).
+        *   *Revenue*: Emerald `#10b981` bars with `#34d399` pill badges and `#34d399` Y-axis ticks.
+        *   *CPO*: Emerald `#10b981` bars (units) + Electric Cyan `#06b6d4` line (revenue).
+        *   *Repairs*: Warm Amber `#f59e0b` (OOW) + Teal `#14b8a6` (Insurance) + Royal Blue `#3b82f6` line (revenue).
+        *   *Traffic*: Rose `#f43f5e` (traffic) + Emerald `#10b981` line (conversion rate).
+    3.  **Brightened Typography & Axis Scale Ticks**:
+        *   Upgraded all X-axis ticks to `#e2e8f0` (Slate 200, weight 600).
+        *   Upgraded card subtitles to `#cbd5e1` (weight 500).
+        *   Upgraded legend labels to `#e2e8f0` (weight 600).
+
 
 
 

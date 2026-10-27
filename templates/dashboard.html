@@ -208,7 +208,7 @@
         <div class="chart-header" style="flex-wrap: wrap; gap: 8px;">
           <div>
             <h3 class="chart-title">Monthly Revenue Trend & YoY Overlay</h3>
-            <span style="font-size: 0.75rem; color: var(--accent-emerald);">Current 2026 vs 2025 Baseline</span>
+            <span style="font-size: 0.8rem; color: #cbd5e1; font-weight: 500;">Current 2026 vs 2025 Baseline</span>
           </div>
           <div class="chart-view-switcher" id="switcher-revenue">
             <button class="chart-view-btn active" onclick="setChartViewMode('revenue', 'timeline', this)">14-Mo Trend</button>
@@ -335,7 +335,7 @@
         <div class="chart-header" style="flex-wrap: wrap; gap: 8px;">
           <div>
             <h3 class="chart-title">Monthly Activations Historical Trend</h3>
-            <span style="font-size: 0.75rem; color: var(--accent-purple);">Past Months (New Activations + Migrations = Total)</span>
+            <span style="font-size: 0.8rem; color: #cbd5e1; font-weight: 500;">Past Months (New Activations + Migrations = Total)</span>
           </div>
           <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
             <div class="chart-view-switcher" id="switcher-activations">
@@ -348,6 +348,10 @@
         </div>
         <div style="height: 320px; position: relative;">
           <canvas id="chart-monthly-activations-trend"></canvas>
+        </div>
+        <div class="chart-info-note">
+          <i data-feather="info" style="width: 14px; height: 14px; color: var(--accent-cyan);"></i>
+          <span><strong>Tracking Timeline:</strong> Corporate scorecard history began in <strong>Sept 2025</strong>. Prior months (Jan–Aug 2025) were not tracked in corporate files. Toggle to <strong>YoY (2025 vs 2026)</strong> for side-by-side annual comparison.</span>
         </div>
       </div>
 
@@ -395,7 +399,7 @@
         <div class="chart-header" style="flex-wrap: wrap; gap: 8px;">
           <div>
             <h3 class="chart-title">Monthly CPO Volume & Revenue Trend</h3>
-            <span style="font-size: 0.75rem; color: var(--accent-emerald);">Historical Units Sold & Revenue</span>
+            <span style="font-size: 0.8rem; color: #cbd5e1; font-weight: 500;">Historical Units Sold & Revenue</span>
           </div>
           <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
             <div class="chart-view-switcher" id="switcher-cpo">
@@ -455,7 +459,7 @@
         <div class="chart-header" style="flex-wrap: wrap; gap: 8px;">
           <div>
             <h3 class="chart-title">Monthly Repairs Historical Trend</h3>
-            <span style="font-size: 0.75rem; color: var(--accent-amber);">Out-of-Warranty vs Insurance Volume</span>
+            <span style="font-size: 0.8rem; color: #cbd5e1; font-weight: 500;">Out-of-Warranty vs Insurance Volume</span>
           </div>
           <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
             <div class="chart-view-switcher" id="switcher-repairs">
@@ -512,7 +516,7 @@
         <div class="chart-header" style="flex-wrap: wrap; gap: 8px;">
           <div>
             <h3 class="chart-title">Monthly Foot Traffic Historical Trend</h3>
-            <span style="font-size: 0.75rem; color: var(--accent-rose);">Door Counter & Conversion Rate</span>
+            <span style="font-size: 0.8rem; color: #cbd5e1; font-weight: 500;">Door Counter & Conversion Rate</span>
           </div>
           <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
             <div class="chart-view-switcher" id="switcher-traffic">
@@ -621,5 +625,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="{{ url_for('static', filename='js/dashboard.js') }}?v=1.4"></script>
+<script src="{{ url_for('static', filename='js/dashboard.js') }}?v=1.5"></script>
 {% endblock %}
