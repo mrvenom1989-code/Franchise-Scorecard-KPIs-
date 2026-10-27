@@ -183,5 +183,75 @@ This document records architectural insights, data anomalies, API quirks, and te
     1.  Slimmed down `session['user']` to store only essential identity fields (`id`, `email`, `role`, `organization_name`, and compact `location_ids`), reducing the cookie size from 5,511 bytes to **258 bytes**.
     2.  Shifted location list loading to dynamic, on-demand database queries inside `routes/dashboard.py` and `routes/admin.py`, guaranteeing that the application scales safely to hundreds of stores without ever approaching browser cookie boundaries.
 
+### `next` URL Parameter Sanitization & Open Redirect Shield
+*   **The Issue**: Clicking "Sign In to Scorecard" from the public landing page redirected users to `/login?next=https://franchise-scorecard-kp-is-drab.vercel.app/`. Upon submitting credentials, users were redirected back to the login page or encountered redirect loop errors.
+*   **Root Cause**: When `next` is passed as an absolute URL (`https://...`), naive URL validation that checks `is_safe_url()` or assumes relative paths can either reject valid internal redirections or create Open Redirect attack vectors if untrusted external URLs are passed. Additionally, if `next` was set to `/login` or contained `/login`, the application entered an infinite login loop.
+*   **Solution**:
+    1.  Used `urllib.parse.urlparse` to inspect `next_url`. If netloc matches the current request host or is empty, extract the path, query, and fragment as a clean relative URL.
+    2.  Explicitly blocked any redirect target that begins with or equals `/login` or `/logout`, falling back unconditionally to `url_for('dashboard.index')`.
+    3.  Rejected any external or mismatching netlocs to protect against phishing and open-redirect exploits.
+
+---
+
+## 9. Reporting Architecture & Metric Relationship Rules
+
+### The Total Activations Invariant (New + Migrations)
+*   **The Issue**: When comparing raw Excel numbers against the database, 110 store records showed total activation numbers that differed from the sum of new activations and migrations.
+*   **Root Cause**: In corporate's Excel workbooks, column naming and formula implementations varied across monthly accounting periods. In some sheets, `Total Activation Trans MTD (Act + Mig)` actually summed New + Migrations; in other sheets, corporate analysts entered only New Activations into that column and logged Migrations in a separate column without summing them.
+*   **Architectural Resolution**:
+    1.  **Deterministic Invariant**: Enforced `activations_total = (activations_new or 0) + (activations_migrations or 0)` across all layers (ingestion scripts, database sync, REST API serializers).
+    2.  **Database Synchronization**: Executed an automated database sweep updating all 110 legacy records in PostgreSQL to ensure historical consistency.
+    3.  **UI Architecture Banner**: Placed an explicit reporting architecture rule banner on the Activations tab (`Total Activations = Total New Activations MTD + Migrations`) to give store managers and accountants complete transparency into the metric definition.
+
+### Chronological Period Sequencing & Snapshot Pruning
+*   **The Issue**: Historical period tables contained both `Jan 26 MTD` (an interim snapshot covering Jan 1–18, 2026) and `Jan 26` (the final, complete month covering Jan 1–31, 2026). Including both periods in 14-month historical trend charts caused duplicate January data points and distorted chronological visual flow.
+*   **Solution**: In `/api/monthly-trend`, filtered out `Jan 26 MTD` so that historical trend lines strictly reflect finalized calendar months plus the active MTD period (`Oct 26 MTD`).
+
+### Month-over-Month (MoM) and Year-over-Year (YoY) Dynamic Comparison Engine
+*   **The Challenge**: Users require instantaneous growth velocity indicators comparing current MTD performance against prior operational baselines.
+*   **Implementation**:
+    *   **MoM Calculation**: Dynamically compares the active period (e.g. `Oct 26 MTD`) with the immediately preceding accounting period (`Sept 26`), calculating absolute deltas and percentage growth for Revenue, Activations, CPO, Repairs, and Traffic.
+    *   **YoY Calculation**: Pairs the active month with the matching month exactly 1 year prior (`Oct 26 MTD` vs `Oct 2025`; `Sept 26` vs `Sept 2025`), providing seasonal benchmarking across a 12-month horizon.
+    *   **UI Delta Tags**: Formatted as colored micro-badges (`▲ +X%` green for positive, `▼ -X%` red for negative, and `neutral` for flat) with full tooltip breakdowns showing baseline vs current values.
+
+---
+
+## 10. Multi-Tenant Benchmarking & UI Interactivity Architecture
+
+### Tri-Level Dynamic Benchmarking (Regional, Global Network, Portfolio)
+*   **The Challenge**: A single regional baseline is insufficient for multi-store franchise groups who need to measure their performance against:
+    1.  Their specific geographic territory (Regional Benchmark).
+    2.  The entire national network of 78+ franchise locations (Global Network Benchmark).
+    3.  Their own internal store portfolio (User Portfolio Benchmark).
+*   **Solution**:
+    *   Unified the calculation inside `routes/api.py`, generating `regional_benchmark`, `global_benchmark`, and `portfolio_benchmark` in a single response payload.
+    *   Added an interactive button group in the Benchmark card (`Regional`, `Global Network`, `My Stores`, `Compare All`).
+    *   In `Compare All` mode, the radar chart plots the user's selected store(s), the Regional Average, and the Global Network Baseline simultaneously on a normalized 100% index scale.
+
+### Top Performer Leaderboard Decoration & Visual Hierarchy
+*   **The UX Pattern**: Franchise operators need immediate visual clarity on store performance rankings without manually sorting or scanning tabular numbers.
+*   **Implementation**:
+    *   Added a dedicated `Rank` column to the Store Performance Leaderboard.
+    *   Applied distinct visual badge treatments for the podium positions:
+        *   **Rank 1**: `🥇 #1` gold badge, ambient gold row gradient, and gold highlight border.
+        *   **Rank 2**: `🥈 #2` silver badge, silver row gradient, and silver highlight border.
+        *   **Rank 3**: `🥉 #3` bronze badge, bronze row gradient, and bronze highlight border.
+        *   **Rank 4+**: `#4`, `#5`, etc. with clean muted pill badges.
+
+### Clickable KPI Widgets as Primary Navigation Affordances
+*   **The UX Pattern**: Dashboard summary cards at the top of an executive view should not be dead ends; they should serve as natural shortcuts to deep-dive analytics.
+*   **Implementation**:
+    *   Configured top KPI cards with `onclick="switchTab(...)"` to jump directly to the relevant operational tab (Gross Revenue/Volume $\rightarrow$ Benchmarks, Activations $\rightarrow$ Activations, CPO $\rightarrow$ CPO, Repairs $\rightarrow$ Repairs, Conversion $\rightarrow$ Traffic).
+    *   Added `.clickable-card` CSS with cursor pointer, hover lift (`transform: translateY(-4px)`), ambient border glow matching the card's accent color, and an animated hover badge indicator (`View Details →`).
+
+### Domain Nomenclature Alignment & Tab Simplification
+*   **The Rationale**: Corporate engineering titles frequently use cumbersome administrative phrasing (`Carrier Activations`, `Hardware & CPO Sales`, `Technical & Repairs`).
+*   **The Fix**: Streamlined UI terminology to match store operator daily vernacular:
+    *   `Carrier Activations` $\rightarrow$ `Activations`
+    *   `Hardware & CPO` $\rightarrow$ `CPO`
+    *   `Technical & Repairs` $\rightarrow$ `Repairs`
+    This reduces mental overhead, saves horizontal tab bar real estate on mobile devices and POS tablets, and keeps visual hierarchy clean and action-oriented.
+
+
 
 
