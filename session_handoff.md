@@ -138,7 +138,12 @@ Three pre-configured test accounts are active in Supabase Auth and ready for val
     *   **Prior Year (YoY Baseline) Dataset**: Plotted an amber dashed baseline directly on all chronological monthly charts (Revenue, Activations, CPO, Repairs, Traffic), connecting matching historical periods from 2025.
     *   **Interactive View Switcher**: Added `[14-Mo Trend]` vs `[YoY (2025 vs 2026)]` toggle buttons on every historical chart. In YoY mode, the chart plots 2025 vs 2026 side-by-side across calendar months (Jan–Dec) with hover tooltips displaying seasonal growth percentages.
     *   **Executive Monthly Revenue Trend Chart**: Added an interactive 2025 vs 2026 historical revenue chart to the Executive Pulse dashboard.
-*   **Asset Cache Busting**: Configured `?v=1.4` query versions on static CSS and JS assets in base and dashboard templates.
+*   **Asset Cache Busting**: Configured `?v=1.5` query versions on static CSS and JS assets in base and dashboard templates.
+*   **High-Visibility Chart Engine & Clean 14-Mo Trend Architecture**:
+    *   Removed disconnected 2-point floating prior-year line in 14-Mo view; corporate tracking began in Sept 2025.
+    *   Implemented executive glassmorphic pill badge data labels (`backgroundColor: "rgba(15, 23, 42, 0.95)"`, `borderColor: "..."`, `font: { weight: "800", size: 11 }`) preventing numbers from washing out.
+    *   Brightened X-axis ticks to `#e2e8f0` (font-weight 600) and card subtitles to `#cbd5e1`.
+    *   Overhauled Activations color scheme to Indigo (`#6366f1`), Sky Cyan (`#0ea5e9`), and Glowing Amber Gold (`#f59e0b`, 3.5px line).
 
 ---
 
@@ -215,8 +220,8 @@ Server runs at `http://127.0.0.1:5001`.
 
 | Component | Status | Details |
 | :--- | :--- | :--- |
-| **Git Remote** | Synced | `https://github.com/mrvenom1989-code/Franchise-Scorecard-KPIs-.git` (`main`) |
-| **Vercel Production** | Live | `https://franchise-scorecard-kp-is-drab.vercel.app/` (HTTP 200 OK) |
+| **Git Remote** | Synced | `https://github.com/mrvenom1989-code/Franchise-Scorecard-KPIs-.git` (`main` @ `4d83eaf`) |
+| **Vercel Production** | Live | `https://franchise-scorecard-kp-is-drab.vercel.app/` (HTTP 200 OK, `v=1.5`) |
 | **Supabase PostgreSQL** | Active | `amjzomlovbuwjneqnumv.supabase.co` (85 locations, 528 monthly KPIs, 15 periods) |
 | **Total Activations Rule** | Active | Enforced in ETL, database (110 rows synced), REST API, and frontend |
 | **Tab Nomenclature** | Active | `Activations`, `CPO`, `Repairs` deployed across templates and controllers |
