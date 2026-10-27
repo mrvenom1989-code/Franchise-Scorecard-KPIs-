@@ -25,7 +25,9 @@ def user_management():
         users = u_resp.data or []
     else:
         # Franchise owner only sees their own assigned locations
-        assignable_locations = current_user.get('locations', [])
+        acc_resp = supabase.table('user_location_access').select('locations(id, store_number, name, region)').eq('user_id', user_id).execute()
+        assignable_locations = [r['locations'] for r in (acc_resp.data or []) if r.get('locations')]
+        assignable_locations.sort(key=lambda x: x.get('store_number', 0))
         assignable_loc_ids = [loc['id'] for loc in assignable_locations]
         
         # Franchise owner sees users created by them or assigned to their locations
@@ -79,7 +81,8 @@ def create_user_route():
 
     # Security check: Ensure selected stores are within current user's permitted stores
     if role != 'super_admin':
-        permitted_store_nums = {str(loc['store_number']) for loc in current_user.get('locations', [])}
+        acc_resp = supabase.table('user_location_access').select('locations(store_number)').eq('user_id', current_user['id']).execute()
+        permitted_store_nums = {str(r['locations']['store_number']) for r in (acc_resp.data or []) if r.get('locations')}
         for s in selected_stores:
             if s not in permitted_store_nums:
                 flash(f"Unauthorized store assignment: Store #{s}", "danger")
@@ -142,7 +145,8 @@ def edit_user_route():
             return redirect(url_for('admin.user_management'))
 
         # Stores assigned must be within the admin's permitted locations
-        permitted_store_nums = {str(loc['store_number']) for loc in current_user.get('locations', [])}
+        acc_resp = supabase.table('user_location_access').select('locations(store_number)').eq('user_id', current_user['id']).execute()
+        permitted_store_nums = {str(r['locations']['store_number']) for r in (acc_resp.data or []) if r.get('locations')}
         for s in selected_stores:
             if s not in permitted_store_nums:
                 flash(f"Unauthorized store assignment: Store #{s}", "danger")

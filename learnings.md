@@ -121,3 +121,67 @@ This document records architectural insights, data anomalies, API quirks, and te
     2.  Set `.store-multiselect-wrapper { position: relative; z-index: 920; }`.
     3.  Set `#store-dropdown-menu { position: absolute; z-index: 9999 !important; background: rgba(15, 23, 42, 0.98); }`.
     This guarantees that the dropdown menu floats on top of all cards, navigation bars, and charts across every browser.
+
+---
+
+## 6. Serverless Payload Limits & Corporate Scorecard Normalization
+
+### Vercel Serverless Function Limits (413 Payload Too Large & Timeouts)
+*   **The Issue**: Uploading the October master scorecard (`Copy of Franchise Scorecard - Oct MTD EOD - 10-25-26.xlsx`, 5.2 MB) through the web admin portal triggered `413 FUNCTION_PAYLOAD_TOO_LARGE`.
+*   **Root Cause**: Vercel enforces a hard, unconfigurable **4.5 MB request body limit** on all HTTP requests to serverless functions. Furthermore, even if bypassed via storage streaming, parsing 14-sheet master workbooks exceeds Vercel's 10–15s function timeout.
+*   **Architectural Resolution**: Adopted the **Hybrid Architecture**: dashboard queries and user management run on Vercel Serverless, while heavy corporate scorecard batch ingestion runs via deterministic CLI tools (`ingest_scorecard.py`) directly targeting Supabase PostgreSQL.
+
+### Corporate Store Notation Normalization (F-Prefix & Float Types)
+*   **The Issue**: Corporate's newer master exports changed store identifiers from pure integers (`333`) to 4-character codes with regional digit duplication (e.g., `'F3333'` for Store #333, `'F3326'` for Store #326, `'F8824'` for Store #824, `'F4401'` for Store #401), and in older sheets loaded numbers as floats (`826.0`). Previous parsing scripts discarded these rows via strict `.isdigit()` checks.
+*   **Solution**: Implemented `extract_store_num()`:
+    1.  Casts floats/ints to integers directly.
+    2.  Strips leading franchise/corporate letter prefixes (`F`, `C`).
+    3.  Strips decimal fractions (`826.0` $\rightarrow$ `826`).
+    4.  Extracts the 3-digit store number when the first two digits repeat the region prefix (`len == 4 and s[0] == s[1]`).
+
+### Dynamic Location Auto-Provisioning & Region Check Constraints
+*   **The Issue**: When network expansion adds new stores (e.g. Spruce Grove, Southgate, Polo Park, Shoppers Mall, Metrotown, WEM), unmapped stores were previously dropped during ingestion. Attempting to insert them with raw sheet values (`ON`, `BC`, `W1`, `Ex`) violated PostgreSQL's check constraint: `CHECK (region IN ('EAST', 'WEST'))`.
+*   **Solution**: 
+    1.  Added automated location provisioning during monthly KPI ingestion.
+    2.  Added `normalize_region()` to map Canadian provinces (`BC`, `AB`, `SK`, `MB` $\rightarrow$ `WEST`; `ON`, `QC`, `NB`, `NS`, `NL` $\rightarrow$ `EAST`) and corporate tier prefixes (`W*` $\rightarrow$ `WEST`; `E*` $\rightarrow$ `EAST`), ensuring 100% compliance with database integrity constraints.
+
+### Uncoupled Category Headers vs. Direct Metric Row Matching
+*   **The Issue**: In newer sheets (e.g., `Sept 26`, `Oct 26 MTD`), corporate merged or omitted the top category row (row 4 had blank cells or merged `'Traffic'` across columns 3–27). Strict composite queries searching for `['all revenue', 'mtd', 'gross revenue']` and `['all activations', 'mtd', 'total activation transactions']` failed to find a match, causing Gross Revenue, Sales Volume, and Activations to evaluate to `0` in the database.
+*   **Solution**: Upgraded `get_val()` to inspect row 8's metric labels directly with multi-pattern fallback matching and negative keyword filters (e.g., matching `['total gross revenue mtd', 'gross revenue mtd']` while excluding `['projected', 'mom total', 'yoy total']`), restoring complete data extraction across all historical and current scorecard formats.
+
+---
+
+## 7. Forensic Data Quality & The Name-First Resolution Architecture
+
+### Corporate Column Misalignment (The Sept 26 1-Row Copy-Paste Shift)
+*   **The Bug**: In the `Sept 26` tab of corporate master workbooks, corporate analysts accidentally shifted Column A (`MK Store #`) down by 1 row across 17 consecutive stores.
+    *   Row 30: Location was `Landsdowne`, but Column A contained `F3326` (Store #326, Lethbridge).
+    *   Row 31: Location was `Lethbridge`, but Column A contained `F1136` (Store #136, Limeridge Mall).
+    *   Row 32: Location was `Limeridge Mall`, but Column A contained `F1153` (Store #153, Mapleview Centre).
+*   **Impact on Prior Ingestion Logic**: Because previous ingestion scripts treated Column A (`MK Store #`) as the sole authoritative foreign key:
+    *   Row 30 (`Landsdowne`, Revenue: **$75,035**, Repairs: **98**) was ingested as **Mobile Klinik Lethbridge (#326)**.
+    *   Row 31 (`Lethbridge`, Revenue: **$171,113**, Repairs: **391**) was ingested as **Mobile Klinik Limeridge Mall (#136)**.
+    *   On the dashboard, selecting Lethbridge for September 2026 displayed Landsdowne's $75,035 revenue and 98 repairs instead of Lethbridge's true $171,113 revenue and 391 repairs.
+*   **The Long-Term Architectural Solution (Name-First Location Resolution)**:
+    1.  **Location Name as Primary Identity**: In retail franchise operations, location names (e.g., "Lethbridge", "Landsdowne", "Market Mall") are human-verified and immune to numeric column-shift errors.
+    2.  **Normalized Name Indexing**: `normalize_store_name()` strips punctuation, parenthetical qualifiers (e.g. `(Oct 17)`), and corporate prefixes (`Mobile Klinik`, `Frchs-`), mapping them to canonical DB locations.
+    3.  **Automatic Discrepancy Reconciliation**: If a row's Location Name matches a known store but the Excel store number disagrees, the ingestion engine logs an audit warning (`[RECONCILED] Sheet '{sheet}' row '{name}': Excel has code '{code}' (#{raw_num}), but canonical store is #{canon_num}`) and routes the data to the correct canonical store.
+    4.  **Fallback & Auto-Provisioning**: Unmatched names fall back to numeric store matching, and brand-new stores are automatically provisioned with province-to-region constraint mapping.
+
+---
+
+## 8. Authentication & Session Engineering
+
+### Browser 4KB Cookie Overflow from Store Expansion
+*   **The Issue**: After ingesting the October scorecard, Super Admin login suddenly stopped working (submitting credentials redirected back to `/login` without logging in or displaying errors).
+*   **Root Cause**:
+    1.  The October scorecard expanded the store network from 40 to **85 locations**.
+    2.  `routes/auth.py` was storing full dictionaries for all 85 stores in `session['user']['locations']`.
+    3.  Because Flask uses client-side signed cookies by default, the serialized session cookie expanded to **5,511 bytes**.
+    4.  Under RFC 6265, web browsers (Chrome, Edge, Firefox, Safari) silently reject any HTTP cookie exceeding **4,096 bytes**. The browser dropped the cookie upon redirect, causing Flask's `@login_required` to view the session as empty and loop back to the login screen.
+*   **Solution**:
+    1.  Slimmed down `session['user']` to store only essential identity fields (`id`, `email`, `role`, `organization_name`, and compact `location_ids`), reducing the cookie size from 5,511 bytes to **258 bytes**.
+    2.  Shifted location list loading to dynamic, on-demand database queries inside `routes/dashboard.py` and `routes/admin.py`, guaranteeing that the application scales safely to hundreds of stores without ever approaching browser cookie boundaries.
+
+
+

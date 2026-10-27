@@ -3,6 +3,7 @@ import os
 import sys
 import json
 import argparse
+import re
 from datetime import datetime, date
 
 # Load environment variables if python-dotenv is present
@@ -15,6 +16,25 @@ try:
         load_dotenv()
 except ImportError:
     pass
+
+def normalize_store_name(s):
+    """Normalizes store names for robust matching across spreadsheets with typos or varied formats."""
+    if not s:
+        return ""
+    s = str(s).lower()
+    s = re.sub(r'\(.*?\)', '', s)  # strip (Oct 17), (326), etc.
+    s = s.replace('mobile klinik', '').replace('frchs-', '').replace('franchise', '').strip()
+    s = re.sub(r'[^a-z0-9]', '', s)  # remove spaces, punctuation
+    # Common corporate aliases and typos in Excel sheets
+    if 'boardwalk' in s and 'kitchener' in s:
+        return 'kitchener'
+    if s == 'lansdowne':
+        return 'landsdowne'
+    if s == 'wem':
+        return 'westedmontonmall'
+    if s == 'kp':
+        return 'kildonanplace'
+    return s
 
 def clean_num(val, default=0.0):
     """Cleans numeric values from Excel cells, converting #DIV/0!, strings, and NaNs to float/int."""
@@ -35,6 +55,47 @@ def clean_num(val, default=0.0):
     except ValueError:
         return default
 
+def extract_store_num(val):
+    """Extracts integer store number from ints, floats (826.0), pure digits ('333'), or corporate prefix codes ('F3333', 'F3326', 'F8824')."""
+    if val is None:
+        return None
+    if isinstance(val, (int, float)):
+        return int(val)
+    s = str(val).strip()
+    if not s:
+        return None
+    # Strip leading corporate/franchise letter if present
+    if s[0].upper() in ['F', 'C']:
+        s = s[1:]
+    if '.' in s:
+        try:
+            s = str(int(float(s)))
+        except ValueError:
+            pass
+    if s.isdigit():
+        # Handle 4-digit codes where first two digits are repeated region prefix (e.g. 3333 -> 333, 3326 -> 326, 8824 -> 824)
+        if len(s) == 4 and s[0] == s[1]:
+            return int(s[1:])
+        return int(s)
+    return None
+
+def normalize_region(prov_or_region):
+    """Maps provinces (ON, BC, AB, MB, QB) or tier codes (W1, Ex) to strictly 'EAST' or 'WEST'."""
+    if not prov_or_region:
+        return 'WEST'
+    s = str(prov_or_region).strip().upper()
+    if s in ['EAST', 'WEST']:
+        return s
+    if s.startswith('W'):
+        return 'WEST'
+    if s.startswith('E'):
+        return 'EAST'
+    if s in ['BC', 'AB', 'SK', 'MB', 'YT', 'NT', 'NU']:
+        return 'WEST'
+    if s in ['ON', 'QC', 'QB', 'NB', 'NS', 'PE', 'PEI', 'NL']:
+        return 'EAST'
+    return 'WEST'
+
 def find_header_row(ws, max_r=12):
     """Finds the header row containing 'MK Store #' or 'Store #'."""
     for r_idx in range(1, max_r + 1):
@@ -51,7 +112,7 @@ def parse_monthly_sheet(ws, sheet_name):
     header_r, store_c = find_header_row(ws)
     if header_r is None:
         print(f"  [WARN] Header not found for sheet {sheet_name}")
-        return []
+        return [], None, None, None
 
     # Read category row (usually header_r - 4 or header_r - 3)
     cat_r = max(1, header_r - 4)
@@ -102,15 +163,21 @@ def parse_monthly_sheet(ws, sheet_name):
         if not any(v is not None for v in r):
             continue
         store_val = r[store_c] if store_c < len(r) else None
-        if store_val is None or not str(store_val).strip().isdigit():
-            continue
-        
-        store_num = int(str(store_val).strip())
+        store_num = extract_store_num(store_val)
         store_name = str(r[store_c + 1]).strip() if (store_c + 1) < len(r) and r[store_c + 1] is not None else ""
-        region = str(r[store_c + 2]).strip() if (store_c + 2) < len(r) and r[store_c + 2] is not None else ""
+
+        # Skip rows with no store info or summary rows
+        if not store_num and not store_name:
+            continue
+        if store_name.lower() in ["total", "corporate", "franchise", "average", "none", "#ref!"]:
+            continue
+
+        raw_reg = r[store_c + 2] if (store_c + 2) < len(r) else None
+        region = normalize_region(raw_reg)
 
         record = {
             "store_number": store_num,
+            "raw_store_val": store_val,
             "store_name": store_name,
             "region": region,
             "sheet": sheet_name,
@@ -119,61 +186,225 @@ def parse_monthly_sheet(ws, sheet_name):
             "extended": {}
         }
 
-        # Helper to search header
-        def get_val(keywords):
-            for col_idx, h in col_headers.items():
-                if all(k.lower() in h for k in keywords):
-                    if col_idx < len(r):
-                        return r[col_idx]
+        # Helper to search header (searches pure row 8 metric_row, then composite col_headers)
+        def get_val(*pattern_lists, forbidden=None):
+            forbidden = forbidden or []
+            # 1. First search metric_row directly
+            for group in pattern_lists:
+                if isinstance(group, str):
+                    group = [group]
+                for col_idx, m_val in enumerate(metric_row):
+                    if m_val is not None:
+                        m_str = str(m_val).strip().lower()
+                        if all(k.lower() in m_str for k in group):
+                            if not any(f.lower() in m_str for f in forbidden):
+                                if col_idx < len(r) and r[col_idx] is not None:
+                                    return r[col_idx]
+            # 2. Search composite col_headers
+            for group in pattern_lists:
+                if isinstance(group, str):
+                    group = [group]
+                for col_idx, h in col_headers.items():
+                    if all(k.lower() in h for k in group):
+                        if not any(f.lower() in h for f in forbidden):
+                            if col_idx < len(r) and r[col_idx] is not None:
+                                return r[col_idx]
             return None
 
         # Canonical metric extraction
-        record["kpis"]["gross_revenue_actual"] = clean_num(get_val(["all revenue", "mtd", "gross revenue"]))
-        record["kpis"]["gross_revenue_projected"] = clean_num(get_val(["all revenue", "projected total gross revenue"]))
-        record["kpis"]["gross_revenue_mom_delta"] = clean_num(get_val(["all revenue", "mom", "rev delta"]))
-        record["kpis"]["gross_revenue_yoy_delta"] = clean_num(get_val(["all revenue", "yoy", "revenue delta"]))
-        record["kpis"]["sales_volume"] = int(clean_num(get_val(["all revenue", "mtd", "total sales"])))
-        record["kpis"]["asp"] = clean_num(get_val(["all revenue", "mtd", "asp"]))
-        record["kpis"]["daily_avg_revenue"] = clean_num(get_val(["all revenue", "mtd", "avg daily $"]))
+        record["kpis"]["gross_revenue_actual"] = clean_num(get_val(
+            ["total gross revenue mtd"],
+            ["gross revenue mtd"],
+            ["all revenue", "mtd", "gross revenue"],
+            ["gross revenue"],
+            forbidden=["projected", "mom total", "yoy total", "mom rev", "yoy rev", "%"]
+        ))
+        record["kpis"]["gross_revenue_projected"] = clean_num(get_val(
+            ["projected total gross revenue"],
+            ["projected gross revenue"],
+            ["projected", "gross revenue"]
+        ))
+        record["kpis"]["gross_revenue_mom_delta"] = clean_num(get_val(
+            ["mom rev delta"],
+            ["mom", "rev delta"],
+            ["mom total gross revenue"]
+        ))
+        record["kpis"]["gross_revenue_yoy_delta"] = clean_num(get_val(
+            ["yoy revenue delta"],
+            ["yoy", "revenue delta"],
+            ["yoy total gross revenue"]
+        ))
+        record["kpis"]["sales_volume"] = int(clean_num(get_val(
+            ["total sales"],
+            ["all revenue", "mtd", "total sales"],
+            forbidden=["projected", "mom", "yoy", "accessory", "volume %"]
+        )))
+        record["kpis"]["asp"] = clean_num(get_val(
+            ["asp"],
+            ["all revenue", "mtd", "asp"],
+            forbidden=["mom", "yoy", "oow", "repair"]
+        ))
+        record["kpis"]["daily_avg_revenue"] = clean_num(get_val(
+            ["avg daily $"],
+            ["avg daily rev"],
+            ["all revenue", "mtd", "avg daily $"]
+        ))
 
         # Activations
-        record["kpis"]["activations_total"] = int(clean_num(get_val(["all activations", "mtd", "total activation transactions"])))
-        record["kpis"]["activations_new"] = int(clean_num(get_val(["all activations", "mtd", "total new activation"])))
-        record["kpis"]["activations_renewals"] = int(clean_num(get_val(["all activations", "mtd", "renuals"])))
-        record["kpis"]["activations_migrations"] = int(clean_num(get_val(["all activations", "mtd", "migrations"])))
-        record["kpis"]["activations_telus_post"] = int(clean_num(get_val(["all activations", "telus post"])))
-        record["kpis"]["activations_koodo_post"] = int(clean_num(get_val(["all activations", "koodo post"])))
-        record["kpis"]["activations_koodo_pre"] = int(clean_num(get_val(["all activations", "koodo pre"])))
+        record["kpis"]["activations_total"] = int(clean_num(get_val(
+            ["total activation trans mtd"],
+            ["total activation transactions mtd"],
+            ["all activations", "mtd", "total activation transactions"],
+            ["total activation"],
+            forbidden=["projected", "mom", "yoy", "%", "attach"]
+        )))
+        record["kpis"]["activations_new"] = int(clean_num(get_val(
+            ["total new activation mtd"],
+            ["all activations", "mtd", "total new activation"],
+            ["total new activation"],
+            forbidden=["projected", "mom", "yoy"]
+        )))
+        record["kpis"]["activations_renewals"] = int(clean_num(get_val(
+            ["renuals"],
+            ["renewals"],
+            ["all activations", "mtd", "renuals"],
+            forbidden=["mom", "yoy", "smb", "new"]
+        )))
+        record["kpis"]["activations_migrations"] = int(clean_num(get_val(
+            ["migrations"],
+            ["all activations", "mtd", "migrations"],
+            forbidden=["mom", "yoy"]
+        )))
+        record["kpis"]["activations_telus_post"] = int(clean_num(get_val(
+            ["tpost"],
+            ["telus post"],
+            ["all activations", "telus post"],
+            forbidden=["mom", "yoy"]
+        )))
+        record["kpis"]["activations_koodo_post"] = int(clean_num(get_val(
+            ["kpost"],
+            ["koodo post"],
+            ["all activations", "koodo post"],
+            forbidden=["mom", "yoy"]
+        )))
+        record["kpis"]["activations_koodo_pre"] = int(clean_num(get_val(
+            ["pre paid"],
+            ["pre-paid"],
+            ["koodo pre"],
+            ["all activations", "koodo pre"],
+            forbidden=["mom", "yoy"]
+        )))
 
         # CPO Hardware
-        record["kpis"]["cpo_units_actual"] = int(clean_num(get_val(["cpo", "mtd", "all cpo units"])))
-        record["kpis"]["cpo_units_projected"] = int(clean_num(get_val(["cpo", "projected all cpo units"])))
-        record["kpis"]["cpo_revenue_actual"] = clean_num(get_val(["cpo", "mtd", "all cpo rev"]))
-        record["kpis"]["cpo_attach_activations_count"] = int(clean_num(get_val(["cpo", "mtd", "# of activations attached to c"])))
-        record["kpis"]["cpo_attach_activations_pct"] = clean_num(get_val(["cpo", "mtd", "% of activation attach to cpo"]))
-        record["kpis"]["cpo_avg_sale"] = clean_num(get_val(["cpo", "avg cpo sale"]))
-        record["kpis"]["trade_in_units"] = int(clean_num(get_val(["trade-ins", "cpo trade-ins mtd"])))
+        record["kpis"]["cpo_units_actual"] = int(clean_num(get_val(
+            ["all cpo units mtd"],
+            ["cpo", "mtd", "all cpo units"],
+            ["all cpo units"],
+            forbidden=["projected", "mom", "yoy"]
+        )))
+        record["kpis"]["cpo_units_projected"] = int(clean_num(get_val(
+            ["projected all cpo units"],
+            ["cpo", "projected all cpo units"]
+        )))
+        record["kpis"]["cpo_revenue_actual"] = clean_num(get_val(
+            ["all cpo rev mtd"],
+            ["cpo", "mtd", "all cpo rev"],
+            ["all cpo rev"],
+            forbidden=["projected", "mom", "yoy"]
+        ))
+        record["kpis"]["cpo_attach_activations_count"] = int(clean_num(get_val(
+            ["# of activations attached to cpo sales mtd"],
+            ["cpo", "mtd", "# of activations attached to c"],
+            forbidden=["projected", "mom", "yoy"]
+        )))
+        record["kpis"]["cpo_attach_activations_pct"] = clean_num(get_val(
+            ["% of activation attach to cpo mtd"],
+            ["cpo", "mtd", "% of activation attach to cpo"],
+            forbidden=["projected", "mom", "yoy"]
+        ))
+        record["kpis"]["cpo_avg_sale"] = clean_num(get_val(
+            ["avg cpo sale"],
+            ["cpo", "avg cpo sale"]
+        ))
+        record["kpis"]["trade_in_units"] = int(clean_num(get_val(
+            ["cpo trade-ins mtd"],
+            ["trade-ins", "cpo trade-ins mtd"],
+            forbidden=["projected", "mom", "yoy"]
+        )))
 
         # Technical Services & Repairs
-        record["kpis"]["repairs_oow_volume"] = int(clean_num(get_val(["oow repair", "total oow repairs"])))
-        record["kpis"]["repairs_oow_revenue"] = clean_num(get_val(["oow repair", "total oow revenue"]))
-        record["kpis"]["repairs_oow_daily_avg"] = clean_num(get_val(["oow repair", "oow repair/day"]))
-        record["kpis"]["repair_attach_activations_count"] = int(clean_num(get_val(["oow repair", "# of activations attached to oow repair"])))
-        record["kpis"]["repair_attach_activations_pct"] = clean_num(get_val(["oow repair", "% of activation attach to oow repair"]))
-        record["kpis"]["repairs_insurance_volume"] = int(clean_num(get_val(["insurance repair", "total insurance repairs"])))
-        record["kpis"]["repairs_insurance_revenue"] = clean_num(get_val(["insurance repair", "total insurance rev"]))
+        record["kpis"]["repairs_oow_volume"] = int(clean_num(get_val(
+            ["total oow repairs"],
+            ["oow repair", "total oow repairs"],
+            forbidden=["projected", "mom", "yoy"]
+        )))
+        record["kpis"]["repairs_oow_revenue"] = clean_num(get_val(
+            ["total oow revenue"],
+            ["oow repair", "total oow revenue"],
+            forbidden=["projected", "mom", "yoy"]
+        ))
+        record["kpis"]["repairs_oow_daily_avg"] = clean_num(get_val(
+            ["oow repair/day"],
+            ["oow repair", "oow repair/day"]
+        ))
+        record["kpis"]["repair_attach_activations_count"] = int(clean_num(get_val(
+            ["# of activations attached to oow repair sales mtd"],
+            ["# of activations attached to oow repair"],
+            forbidden=["projected", "mom", "yoy"]
+        )))
+        record["kpis"]["repair_attach_activations_pct"] = clean_num(get_val(
+            ["% of activation attach to oow repair mtd"],
+            ["% of activation attach to oow repair"],
+            forbidden=["projected", "mom", "yoy"]
+        ))
+        record["kpis"]["repairs_insurance_volume"] = int(clean_num(get_val(
+            ["total insurance repairs mtd"],
+            ["total insurance repairs"],
+            ["insurance repair", "total insurance repairs"],
+            forbidden=["projected", "mom", "yoy"]
+        )))
+        record["kpis"]["repairs_insurance_revenue"] = clean_num(get_val(
+            ["total insurance rev mtd"],
+            ["total insurance rev"],
+            ["insurance repair", "total insurance rev"],
+            forbidden=["projected", "mom", "yoy"]
+        ))
 
         # Retail & Accessories
-        record["kpis"]["accessories_volume"] = int(clean_num(get_val(["accessory sales", "total # accessory volume"])))
-        record["kpis"]["accessories_revenue"] = clean_num(get_val(["accessory sales", "total accessory revenue mtd"]))
-        record["kpis"]["accessory_attach_oow_repair_pct"] = clean_num(get_val(["accessory sales", "accessory attach % on oow repair"]))
-        record["kpis"]["protection_bundles_volume"] = int(clean_num(get_val(["protection bundles", "protection bundle mtd"])))
+        record["kpis"]["accessories_volume"] = int(clean_num(get_val(
+            ["total # accessory volume"],
+            ["total accessory volume"],
+            forbidden=["projected", "mom", "yoy"]
+        )))
+        record["kpis"]["accessories_revenue"] = clean_num(get_val(
+            ["total accessory revenue mtd"],
+            ["total accessory revenue"],
+            forbidden=["projected", "mom", "yoy"]
+        ))
+        record["kpis"]["accessory_attach_oow_repair_pct"] = clean_num(get_val(
+            ["accessory attach % on oow repair"],
+            forbidden=["projected", "mom", "yoy"]
+        ))
+        record["kpis"]["protection_bundles_volume"] = int(clean_num(get_val(
+            ["protection bundle mtd"],
+            forbidden=["projected", "mom", "yoy"]
+        )))
 
         # Traffic & Funnel
-        record["kpis"]["foot_traffic_total"] = int(clean_num(get_val(["traffic", "total traffic mtd"])))
-        record["kpis"]["foot_traffic_daily_avg"] = clean_num(get_val(["traffic", "avg daily traffic"]))
-        record["kpis"]["foot_traffic_7day_ma"] = clean_num(get_val(["traffic", "traffic 7day ma"]))
-        record["kpis"]["tickets_opened_7day_ma"] = clean_num(get_val(["traffic", "ticket opened 7day ma"]))
+        record["kpis"]["foot_traffic_total"] = int(clean_num(get_val(
+            ["total traffic mtd"],
+            forbidden=["projected", "mom", "yoy"]
+        )))
+        record["kpis"]["foot_traffic_daily_avg"] = clean_num(get_val(
+            ["avg daily traffic"],
+            forbidden=["projected", "mom", "yoy"]
+        ))
+        record["kpis"]["foot_traffic_7day_ma"] = clean_num(get_val(
+            ["traffic 7day ma"]
+        ))
+        record["kpis"]["tickets_opened_7day_ma"] = clean_num(get_val(
+            ["ticket opened 7day ma"]
+        ))
         if record["kpis"]["foot_traffic_total"] > 0:
             tot_transactions = record["kpis"]["activations_total"] + record["kpis"]["cpo_units_actual"] + record["kpis"]["repairs_oow_volume"]
             record["kpis"]["conversion_rate_pct"] = round((tot_transactions / record["kpis"]["foot_traffic_total"]) * 100.0, 2)
@@ -215,10 +446,10 @@ def parse_wow_sheet(ws, sheet_name, metric_type):
         if not any(v is not None for v in r):
             continue
         store_val = r[store_c] if store_c < len(r) else None
-        if store_val is None or not str(store_val).strip().isdigit():
+        store_num = extract_store_num(store_val)
+        if store_num is None:
             continue
-        
-        store_num = int(str(store_val).strip())
+
         for c_idx, dt in date_cols:
             val = clean_num(r[c_idx] if c_idx < len(r) else None)
             delta_val = None
@@ -251,7 +482,7 @@ def main():
     all_monthly = {}
     wow_sheets = {"WOW Activation", "WOW CPO Volume", "WOW WI Repair Volume", "WOW Traffic"}
     # Dynamically discover all monthly scorecard sheets (ignoring weekly WOW sheets, Cover, etc.)
-    monthly_sheets = [s for s in wb.sheetnames if s.strip() not in wow_sheets and not s.strip().startswith("Cover") and not s.strip().startswith("Outdoor")]
+    monthly_sheets = [s for s in wb.sheetnames if s.strip() not in wow_sheets and not s.strip().startswith("Cover") and not s.strip().startswith("Outdoor") and not s.strip().startswith("Koodo")]
     print(f"Dynamically discovered {len(monthly_sheets)} monthly scorecard sheet(s): {monthly_sheets}")
 
     for s_name in monthly_sheets:
@@ -303,10 +534,20 @@ def main():
     supabase_key = os.environ.get("SUPABASE_KEY")
     supabase = create_client(supabase_url, supabase_key)
 
-    # 1. Fetch locations map (store_number -> location_id)
-    loc_resp = supabase.table("locations").select("id, store_number").execute()
-    store_map = {row["store_number"]: row["id"] for row in loc_resp.data}
-    print(f"Mapped {len(store_map)} locations in Supabase.")
+    # 1. Fetch locations map with name indexing for human-error resilience
+    loc_resp = supabase.table("locations").select("id, store_number, name, short_name, region").execute()
+    locations_list = loc_resp.data
+
+    num_to_loc = {row["store_number"]: row for row in locations_list}
+    name_to_loc = {}
+    for row in locations_list:
+        n1 = normalize_store_name(row["name"])
+        n2 = normalize_store_name(row.get("short_name"))
+        if n1:
+            name_to_loc[n1] = row
+        if n2:
+            name_to_loc[n2] = row
+    print(f"Mapped {len(locations_list)} locations ({len(name_to_loc)} name aliases) in Supabase.")
 
     # 2. Upsert periods and monthly KPIs
     for s_name, p_info in all_monthly.items():
@@ -322,9 +563,46 @@ def main():
         # Insert KPI rows
         kpi_payload = []
         for r in records:
-            loc_id = store_map.get(r["store_number"])
-            if not loc_id:
+            raw_name = r["store_name"]
+            raw_num = r["store_number"]
+            norm_n = normalize_store_name(raw_name)
+
+            matched_loc = None
+            # 1. Primary: Match by canonical location name (protects against Excel column copy-paste row shifts)
+            if norm_n and norm_n in name_to_loc:
+                matched_loc = name_to_loc[norm_n]
+                if raw_num and raw_num != matched_loc["store_number"]:
+                    print(f"  [RECONCILED] Sheet '{s_name}' row '{raw_name}': Excel has code '{r.get('raw_store_val')}' (#{raw_num}), but canonical store is #{matched_loc['store_number']}. Reconciled by Location Name!")
+            # 2. Secondary: Match by store number if name didn't match
+            elif raw_num and raw_num in num_to_loc:
+                matched_loc = num_to_loc[raw_num]
+
+            # 3. Auto-provision if completely new store
+            if not matched_loc:
+                try:
+                    clean_name = raw_name.split("(")[0].strip() or f"Store {raw_num}"
+                    new_num = raw_num or 999
+                    new_loc = supabase.table("locations").insert({
+                        "store_number": new_num,
+                        "name": f"Mobile Klinik {clean_name}",
+                        "short_name": clean_name,
+                        "region": normalize_region(r.get("region")),
+                        "store_type": "franchise",
+                        "is_active": True
+                    }).execute()
+                    if new_loc.data:
+                        matched_loc = new_loc.data[0]
+                        num_to_loc[matched_loc["store_number"]] = matched_loc
+                        name_to_loc[normalize_store_name(matched_loc["name"])] = matched_loc
+                        name_to_loc[normalize_store_name(clean_name)] = matched_loc
+                        print(f"  [AUTO-PROVISION] Added new store #{new_num} - {clean_name} ({normalize_region(r.get('region'))})")
+                except Exception as e:
+                    print(f"  [WARN] Failed to auto-provision store '{raw_name}' (#{raw_num}): {e}")
+
+            if not matched_loc:
                 continue
+
+            loc_id = matched_loc["id"]
             item = dict(r["kpis"])
             item["location_id"] = loc_id
             item["period_id"] = period_id
@@ -333,7 +611,7 @@ def main():
             if item.get("foot_traffic_total", 0) == 0:
                 w_traffic_sum = 0
                 for w in all_weekly:
-                    if w["store_number"] == r["store_number"] and w["metric_type"] == "traffic":
+                    if w["store_number"] == matched_loc["store_number"] and w["metric_type"] == "traffic":
                         w_date = str(w["week_end_date"])
                         if str(p_info["start_date"]) <= w_date <= str(p_info["end_date"]):
                             w_traffic_sum += int(w["value"] or 0)
@@ -353,9 +631,10 @@ def main():
     # 3. Upsert weekly KPIs (deduplicated by composite key)
     weekly_dict = {}
     for w in all_weekly:
-        loc_id = store_map.get(w["store_number"])
-        if not loc_id:
+        loc_obj = num_to_loc.get(w["store_number"])
+        if not loc_obj:
             continue
+        loc_id = loc_obj["id"]
         key = (loc_id, w["week_end_date"], w["metric_type"])
         # If duplicate, prefer the one with non-zero or newer value
         if key not in weekly_dict or (weekly_dict[key]["value"] == 0 and w["value"] != 0):

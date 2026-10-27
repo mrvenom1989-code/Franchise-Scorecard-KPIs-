@@ -63,9 +63,9 @@ A modern, multi-tenant operations dashboard and performance analytics engine for
 ## 5. Reporting Modules & Tabs
 
 *   **Executive Scorecard**: High-level financial KPIs, projected vs actual, MoM/YoY growth, and store leaderboard.
-*   **Carrier Activations**: Telus & Koodo breakdown (New, Renewals, Migrations, Postpaid vs Prepaid, Financing).
-*   **Hardware & CPO**: Certified Pre-Owned units, revenue, ASP, and **CPO Activation Attach Rate %**.
-*   **Service & Repairs**: Out of Warranty (OOW) vs Insurance repairs, daily turnaround, and **Repair-to-Activation Attach Rate %**.
+*   **Activations**: Telus & Koodo breakdown (New, Renewals, Migrations, Postpaid vs Prepaid, Financing).
+*   **CPO**: Certified Pre-Owned units, revenue, ASP, and **CPO Activation Attach Rate %**.
+*   **Repairs**: Out of Warranty (OOW) vs Insurance repairs, daily turnaround, and **Repair-to-Activation Attach Rate %**.
 *   **Retail & Accessories**: Accessory revenue, daily sales rate, accessory attach % on repairs, and protection bundles.
 *   **Foot Traffic & Funnel**: Door traffic, tickets opened, and conversion rate %.
 *   **Store Benchmarking**: Side-by-side radar and comparative multi-bar charts.

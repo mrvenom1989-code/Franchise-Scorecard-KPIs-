@@ -62,15 +62,16 @@ The application adheres strictly to the **3-Layer Architecture** defined in `AGE
 All tables are active and operational on Supabase (`https://amjzomlovbuwjneqnumv.supabase.co`):
 
 1.  **`locations`**:
-    *   40 pre-seeded stores (28 franchise stores + 12 corporate outdoor benchmark locations).
+    *   **85 active stores** in the franchise network (expanded dynamically from 40).
     *   Columns: `id` (UUID), `store_number` (INT, Unique), `name`, `short_name`, `region` (`WEST`, `EAST`), `store_type` (`franchise`, `corporate`), `is_active`.
 2.  **`user_profiles`**:
     *   Columns: `id` (UUID, references `auth.users`), `full_name`, `email`, `role` (`super_admin`, `admin`, `store_manager`, `accountant`, `staff`), `organization_name`, `created_by`, `is_active`.
 3.  **`user_location_access`**:
     *   Many-to-many relationship linking `user_id` $\rightarrow$ `location_id`.
 4.  **`scorecard_periods`**:
-    *   Normalized accounting periods: `Jan 26 MTD`, `Dec 2025`, `Nov 25`, `Oct 2025`, `Sept 2025`.
+    *   **15 normalized accounting periods**: `Oct 26 MTD` (Oct 1–25, 2026), `Sept 26`, `Aug 26`, `July 26`, `June 26`, `May 26`, `April 26`, `Mar 26`, `Feb 26`, `Jan 26`, `Jan 26 MTD`, `Dec 2025`, `Nov 25`, `Oct 2025`, `Sept 2025`.
 5.  **`monthly_kpis`**:
+    *   **527 total monthly KPI records** loaded across 85 stores.
     *   Composite unique constraint: `(location_id, period_id)`.
     *   Contains 30+ financial & operational metrics (Gross revenue, ASP, activations split, CPO sales & attach rates, repairs OOW/insurance, foot traffic, conversion rates).
 6.  **`weekly_kpis`**:
@@ -85,7 +86,7 @@ Three pre-configured test accounts are active in Supabase Auth and ready for val
 
 | Role | Email | Password | Access Scope |
 | :--- | :--- | :--- | :--- |
-| **Super Admin** | `admin@mobileklinik.ca` | `AdminPassword2026!` | All 40 Network Locations & Full Admin Portal |
+| **Super Admin** | `admin@mobileklinik.ca` | `AdminPassword2026!` | All 85 Network Locations & Full Admin Portal |
 | **Franchise Owner** | `franchise.west@mobileklinik.ca` | `OwnerPassword2026!` | 8 West Stores (`333, 334, 326, 824, 825, 336, 335, 328`) |
 | **Store Manager** | `manager.countryhills@mobileklinik.ca` | `ManagerPassword2026!` | Store #333 (Mobile Klinik Country Hills) |
 
@@ -93,12 +94,19 @@ Three pre-configured test accounts are active in Supabase Auth and ready for val
 
 ## 5. Summary of Recent Improvements & Hardening
 
+*   **October 2026 Master Scorecard Ingestion**: Successfully ingested `Copy of Franchise Scorecard - Oct MTD EOD - 10-25-26.xlsx` (5.2 MB) containing 14 monthly sheets, upserting 499 monthly records and expanding active accounting periods up to `Oct 26 MTD`.
+*   **Corporate Store Code Notation Support**: Built `extract_store_num()` to parse corporate's newer 4-digit codes with repeated regional prefixes (e.g. `'F3333'` $\rightarrow$ `333`, `'F3326'` $\rightarrow$ `326`, `'F8824'` $\rightarrow$ `824`, `'F4401'` $\rightarrow$ `401`), as well as float cell values (`826.0`).
+*   **Automated Store Provisioning with Region Normalization**: Implemented dynamic on-the-fly provisioning of new store branches during ingestion, with `normalize_region()` mapping Canadian provinces (`ON`, `BC`, `AB`, `MB`, `QB`) and corporate tier codes (`W1`, `Ex`) to PostgreSQL check constraints (`CHECK (region IN ('EAST', 'WEST'))`).
 *   **Chart.js Data Point Labels**: Integrated `chartjs-plugin-datalabels` across Revenue Mix, Activations Donut, Repairs Donut, Benchmark Bar, Weekly Trends (4 lines), and Radar charts with compact formatting (`$Xk`, percentages, units) and zero suppression.
 *   **Store Multi-Select Checkbox Dropdown**: Built custom floating dropdown in the dashboard toolbar with real-time substring search, "All"/"Clear" quick buttons, store number pills, and serialized comma-separated ID support.
 *   **Conversion Funnel Outage Resolution**: Diagnosed and resolved the root cause of the "0" conversion rate in `Jan 26 MTD` by building an automated weekly traffic fallback in `ingest_scorecard.py` (recovering 3,111 door visits) and adding outage detection badges in `dashboard.js`.
 *   **Comprehensive User Editing**: Added an Actions column with an interactive **Edit** modal in `/admin/users` allowing administrators to modify user names, roles, account status (active/suspended), password resets, and store mappings.
 *   **Store Search Filter in Modals**: Added real-time store search filtering in both Provision and Edit user modals.
-*   **CSS Stacking Context Hardening**: Fixed dropdown clipping by elevating `.control-bar` to `z-index: 900` and `#store-dropdown-menu` to `z-index: 9999 !important`.
+*   **Navigation Tabs Streamlined**: Renamed core navigation tabs and KPI modal chips per operational standards:
+    *   `Carrier Activations` $\rightarrow$ `Activations`
+    *   `Hardware & CPO` $\rightarrow$ `CPO`
+    *   `Technical & Repairs` $\rightarrow$ `Repairs`
+*   **Forensic Data Ingestion & Name-First Resolution Architecture**: Resolved corporate's human data-entry error in `Sept 26` (where Column A store numbers were shifted down 1 row across 17 stores, causing Lethbridge to show Landsdowne's $75,035 revenue). Built `normalize_store_name()` and a Name-First Location Resolution engine that automatically detects and reconciles store code column misalignments in Excel files, restoring Lethbridge to its true $171,113 revenue and $63,616 OOW repair revenue.
 *   **Asset Cache Busting**: Configured `?v=1.2` query versions on static CSS and JS assets in base templates.
 
 ---

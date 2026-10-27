@@ -321,7 +321,7 @@ function renderLeaderboardTable(stores) {
   });
 }
 
-// 2. Update Carrier Activations Tab
+// 2. Update Activations Tab
 function updateActivationsTab(data) {
   const s = data.summary || {};
   document.getElementById("kpi-postpaid-split").innerText = `${s.activations_telus_post || 0} / ${s.activations_koodo_post || 0}`;

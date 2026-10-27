@@ -60,34 +60,26 @@ def login():
 
             role = profile.get('role', 'store_manager')
 
-            # Fetch permitted locations
-            permitted_locations = []
-            if role == 'super_admin':
-                # Super Admin has access to all active locations
-                loc_resp = supabase.table('locations').select('id, store_number, name, short_name, region, store_type').eq('is_active', True).order('store_number').execute()
-                permitted_locations = loc_resp.data or []
-            else:
-                # Scoped to user_location_access
-                acc_resp = supabase.table('user_location_access').select('location_id, locations(*)').eq('user_id', user_id).execute()
-                for row in (acc_resp.data or []):
-                    if row.get('locations'):
-                        permitted_locations.append(row['locations'])
+            # Fetch permitted location IDs (only for non-super_admin)
+            location_ids = []
+            if role != 'super_admin':
+                acc_resp = supabase.table('user_location_access').select('location_id').eq('user_id', user_id).execute()
+                location_ids = [row['location_id'] for row in (acc_resp.data or [])]
 
-            # Sort by store number
-            permitted_locations.sort(key=lambda x: x.get('store_number', 0))
-
+            # Keep session cookie compact (< 400 bytes) to comply with browser RFC 6265 4KB limit
             session['user'] = {
                 'id': user_id,
                 'email': email,
                 'full_name': profile.get('full_name', email.split('@')[0]),
                 'role': role,
                 'organization_name': profile.get('organization_name', 'Mobile Klinik'),
-                'location_ids': [loc['id'] for loc in permitted_locations],
-                'locations': permitted_locations
+                'location_ids': location_ids
             }
 
             next_url = request.args.get('next')
-            return redirect(next_url or url_for('dashboard.index'))
+            if not next_url or '/login' in next_url or (not next_url.startswith('/') and not next_url.startswith(request.host_url)):
+                next_url = url_for('dashboard.index')
+            return redirect(next_url)
 
         except Exception as e:
             msg = str(e).replace("AuthApiError:", "").strip()
