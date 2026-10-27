@@ -9,6 +9,8 @@ if (window.ChartDataLabels) {
 }
 
 let charts = {};
+let currentScorecardData = null;
+let currentBenchmarkMode = "regional"; // 'regional', 'global', 'portfolio', 'compare_all'
 
 document.addEventListener("DOMContentLoaded", function () {
   loadDashboardData();
@@ -122,6 +124,7 @@ async function loadDashboardData() {
     const res = await fetch(`/api/scorecard-data?period_id=${periodId}&location_id=${locParam}`);
     if (!res.ok) throw new Error("Failed to fetch scorecard data");
     const data = await res.json();
+    currentScorecardData = data;
 
     updateExecutiveTab(data);
     updateActivationsTab(data);
@@ -131,8 +134,8 @@ async function loadDashboardData() {
     updateTrafficTab(data);
     updateBenchmarkTab(data);
 
-    // Also fetch weekly trends for the selected locations
-    loadWeeklyTrends(locParam);
+    // Fetch monthly historical trends & YoY/MoM comparisons across all tabs
+    loadMonthlyTrends(locParam);
 
   } catch (err) {
     console.error("Error loading dashboard data:", err);
@@ -148,13 +151,19 @@ function updateExecutiveTab(data) {
   document.getElementById("kpi-asp").innerText = formatCurrency(s.asp);
   document.getElementById("kpi-activations").innerText = formatNumber(s.activations_total);
   document.getElementById("kpi-activations-new").innerText = formatNumber(s.activations_new);
-  document.getElementById("kpi-activations-renewals").innerText = formatNumber(s.activations_renewals);
+
+  const migSub = document.getElementById("kpi-activations-migrations-sub");
+  if (migSub) migSub.innerText = formatNumber(s.activations_migrations || 0);
+
+  const renSub = document.getElementById("kpi-activations-renewals");
+  if (renSub) renSub.innerText = formatNumber(s.activations_renewals || 0);
+
   document.getElementById("kpi-cpo-units").innerText = formatNumber(s.cpo_units_actual);
   document.getElementById("kpi-cpo-revenue").innerText = formatCurrency(s.cpo_revenue_actual);
   document.getElementById("kpi-repairs-total").innerText = formatNumber(s.repairs_oow_volume + s.repairs_insurance_volume);
   document.getElementById("kpi-repairs-oow").innerText = formatNumber(s.repairs_oow_volume);
   document.getElementById("kpi-repairs-ins").innerText = formatNumber(s.repairs_insurance_volume);
-  
+
   if (s.foot_traffic_total > 0) {
     document.getElementById("kpi-conversion-rate").innerText = (s.conversion_rate_pct || 0) + "%";
     document.getElementById("kpi-traffic-count").innerText = formatNumber(s.foot_traffic_total);
@@ -166,11 +175,13 @@ function updateExecutiveTab(data) {
   // Render Revenue Mix Bar Chart with Datalabels
   renderRevenueMixChart(s);
 
-  // Render Benchmark Radar Chart with Datalabels and Normalized Multi-Store Index
-  renderBenchmarkRadarChart(s, data.benchmark || {}, data);
+  // Render Benchmark Radar Chart
+  renderBenchmarkRadarChart(s, currentBenchmarkMode, data);
 
-  // Render Store Leaderboard Table
+  // Render Store Leaderboard Table with Top 3 Highlights
   renderLeaderboardTable(data.store_rows || []);
+
+  if (window.feather) feather.replace();
 }
 
 function renderRevenueMixChart(s) {
@@ -222,13 +233,28 @@ function renderRevenueMixChart(s) {
   });
 }
 
-function renderBenchmarkRadarChart(s, bm, data) {
+// Benchmark Mode Switcher (Req 4: Regional, Global Network, User Stores, Compare All)
+function setBenchmarkMode(mode) {
+  currentBenchmarkMode = mode;
+  document.querySelectorAll(".bm-toggle-btn").forEach(btn => {
+    btn.classList.toggle("active", btn.dataset.bm === mode);
+  });
+  if (currentScorecardData) {
+    renderBenchmarkRadarChart(currentScorecardData.summary || {}, currentBenchmarkMode, currentScorecardData);
+  }
+}
+
+function renderBenchmarkRadarChart(s, modeOrBm, data) {
   const ctx = document.getElementById("chart-benchmark-radar");
   if (!ctx) return;
   if (charts.benchmarkRadar) charts.benchmarkRadar.destroy();
 
+  const bmMode = typeof modeOrBm === "string" ? modeOrBm : currentBenchmarkMode;
+  const regBm = (data && data.regional_benchmark) || (data && data.benchmark) || {};
+  const globBm = (data && data.global_benchmark) || {};
+  const portBm = (data && data.portfolio_benchmark) || {};
+
   const bmLabel = document.getElementById("benchmark-region-label");
-  if (bmLabel) bmLabel.innerText = `${bm.region || 'West'} Region Average (${bm.store_count || 0} Stores)`;
 
   const storeCnt = Math.max(1, (data && data.store_rows ? data.store_rows.length : 1));
   const perStoreRev = (s.gross_revenue_actual || 0) / storeCnt;
@@ -237,35 +263,100 @@ function renderBenchmarkRadarChart(s, bm, data) {
   const perStoreRep = (s.repairs_oow_volume || 0) / storeCnt;
   const perStoreTraf = (s.foot_traffic_total || 0) / storeCnt;
 
+  const calcIndices = (bm) => [
+    bm && bm.avg_revenue ? Math.round((perStoreRev / bm.avg_revenue) * 100) : 100,
+    bm && bm.avg_activations ? Math.round((perStoreActs / bm.avg_activations) * 100) : 100,
+    bm && bm.avg_cpo ? Math.round((perStoreCpo / bm.avg_cpo) * 100) : 100,
+    bm && bm.avg_repairs ? Math.round((perStoreRep / bm.avg_repairs) * 100) : 100,
+    bm && bm.avg_traffic ? Math.round((perStoreTraf / bm.avg_traffic) * 100) : 100
+  ];
+
+  let datasets = [];
+
+  if (bmMode === "compare_all") {
+    if (bmLabel) bmLabel.innerText = "Multi-Benchmark Comparison (Selected vs Region vs Global)";
+    datasets = [
+      {
+        label: storeCnt > 1 ? `Selected (${storeCnt} Stores)` : "Your Store",
+        data: calcIndices(globBm),
+        borderColor: "#06b6d4",
+        backgroundColor: "rgba(6, 182, 212, 0.22)",
+        pointBackgroundColor: "#06b6d4",
+        pointRadius: 4
+      },
+      {
+        label: `Regional (${regBm.region || 'Region'} Avg)`,
+        data: globBm.avg_revenue ? [
+          Math.round((regBm.avg_revenue / globBm.avg_revenue) * 100),
+          Math.round((regBm.avg_activations / globBm.avg_activations) * 100),
+          Math.round((regBm.avg_cpo / globBm.avg_cpo) * 100),
+          Math.round((regBm.avg_repairs / globBm.avg_repairs) * 100),
+          Math.round((regBm.avg_traffic / globBm.avg_traffic) * 100)
+        ] : [100, 100, 100, 100, 100],
+        borderColor: "#a855f7",
+        backgroundColor: "rgba(168, 85, 247, 0.15)",
+        pointBackgroundColor: "#a855f7",
+        pointRadius: 3
+      },
+      {
+        label: "Global Baseline (100%)",
+        data: [100, 100, 100, 100, 100],
+        borderColor: "rgba(255,255,255,0.3)",
+        borderDash: [4, 4],
+        backgroundColor: "rgba(255,255,255,0.02)",
+        pointBackgroundColor: "rgba(255,255,255,0.5)",
+        pointRadius: 2
+      }
+    ];
+  } else {
+    let targetBm = regBm;
+    let bmTitle = `${regBm.region || 'West'} Region Average (${regBm.store_count || 0} Stores)`;
+    let baselineName = "Regional Baseline (100%)";
+
+    if (bmMode === "global") {
+      targetBm = globBm;
+      bmTitle = `Global Network Average (${globBm.store_count || 0} Franchise Stores)`;
+      baselineName = "Global Network Baseline (100%)";
+    } else if (bmMode === "portfolio") {
+      if (portBm && portBm.store_count) {
+        targetBm = portBm;
+        bmTitle = `Your Multi-Store Portfolio Average (${portBm.store_count} Stores)`;
+        baselineName = "Your Portfolio Baseline (100%)";
+      } else {
+        targetBm = regBm;
+        bmTitle = `Single Store Profile (Comparing with ${regBm.region || 'Regional'} Benchmark)`;
+        baselineName = "Regional Baseline (100%)";
+      }
+    }
+
+    if (bmLabel) bmLabel.innerText = bmTitle;
+
+    datasets = [
+      {
+        label: storeCnt > 1 ? `Selected Avg (${storeCnt} Stores)` : "Your Store",
+        data: calcIndices(targetBm),
+        borderColor: "#6366f1",
+        backgroundColor: "rgba(99, 102, 241, 0.25)",
+        pointBackgroundColor: "#6366f1",
+        pointRadius: 4
+      },
+      {
+        label: baselineName,
+        data: [100, 100, 100, 100, 100],
+        borderColor: "rgba(255,255,255,0.3)",
+        borderDash: [4, 4],
+        backgroundColor: "rgba(255,255,255,0.03)",
+        pointBackgroundColor: "rgba(255,255,255,0.5)",
+        pointRadius: 2
+      }
+    ];
+  }
+
   charts.benchmarkRadar = new Chart(ctx, {
     type: "radar",
     data: {
       labels: ["Revenue Index", "Activations", "CPO Units", "Repairs", "Traffic Index"],
-      datasets: [
-        {
-          label: storeCnt > 1 ? `Selected Avg (${storeCnt} Stores)` : "Your Store",
-          data: [
-            bm.avg_revenue ? Math.round((perStoreRev / bm.avg_revenue) * 100) : 100,
-            bm.avg_activations ? Math.round((perStoreActs / bm.avg_activations) * 100) : 100,
-            bm.avg_cpo ? Math.round((perStoreCpo / bm.avg_cpo) * 100) : 100,
-            bm.avg_repairs ? Math.round((perStoreRep / bm.avg_repairs) * 100) : 100,
-            bm.avg_traffic ? Math.round((perStoreTraf / bm.avg_traffic) * 100) : 100
-          ],
-          borderColor: "#6366f1",
-          backgroundColor: "rgba(99, 102, 241, 0.25)",
-          pointBackgroundColor: "#6366f1",
-          pointRadius: 4
-        },
-        {
-          label: "Regional Baseline (100%)",
-          data: [100, 100, 100, 100, 100],
-          borderColor: "rgba(255,255,255,0.3)",
-          borderDash: [4, 4],
-          backgroundColor: "rgba(255,255,255,0.03)",
-          pointBackgroundColor: "rgba(255,255,255,0.5)",
-          pointRadius: 2
-        }
-      ]
+      datasets: datasets
     },
     options: {
       responsive: true,
@@ -288,13 +379,14 @@ function renderBenchmarkRadarChart(s, bm, data) {
           formatter: v => v + "%"
         },
         tooltip: {
-          callbacks: { label: ctx => ` ${ctx.dataset.label}: ${Math.round(ctx.raw)}% of avg` }
+          callbacks: { label: ctx => ` ${ctx.dataset.label}: ${Math.round(ctx.raw)}% of baseline` }
         }
       }
     }
   });
 }
 
+// Store Performance Leaderboard with Top 3 Highlights (Req 5)
 function renderLeaderboardTable(stores) {
   const tbody = document.getElementById("leaderboard-tbody");
   const countEl = document.getElementById("leaderboard-count");
@@ -305,7 +397,23 @@ function renderLeaderboardTable(stores) {
 
   stores.forEach((st, idx) => {
     const tr = document.createElement("tr");
+    let rankBadge = "";
+    if (idx === 0) {
+      tr.className = "top-performer rank-1";
+      rankBadge = `<span class="rank-badge rank-1">🥇 #1</span>`;
+    } else if (idx === 1) {
+      tr.className = "top-performer rank-2";
+      rankBadge = `<span class="rank-badge rank-2">🥈 #2</span>`;
+    } else if (idx === 2) {
+      tr.className = "top-performer rank-3";
+      rankBadge = `<span class="rank-badge rank-3">🥉 #3</span>`;
+    } else {
+      tr.className = "";
+      rankBadge = `<span class="rank-badge rank-default">#${idx + 1}</span>`;
+    }
+
     tr.innerHTML = `
+      <td style="text-align: center;">${rankBadge}</td>
       <td><strong>#${st.store_number}</strong></td>
       <td><strong>${st.name}</strong></td>
       <td><span class="role-pill" style="background:rgba(255,255,255,0.05);">${st.region}</span></td>
@@ -321,13 +429,34 @@ function renderLeaderboardTable(stores) {
   });
 }
 
-// 2. Update Activations Tab
+// 2. Update Activations Tab (Req 1 & 2: Architecture Rule & 6 KPI Cards)
 function updateActivationsTab(data) {
   const s = data.summary || {};
-  document.getElementById("kpi-postpaid-split").innerText = `${s.activations_telus_post || 0} / ${s.activations_koodo_post || 0}`;
-  document.getElementById("kpi-finance-count").innerText = formatNumber(s.koodo_finance + s.telus_finance);
-  document.getElementById("kpi-migrations-count").innerText = formatNumber(s.activations_migrations + s.activations_renewals);
 
+  // Banner Total Activations (Total = New + Migrations)
+  const bannerTotal = document.getElementById("kpi-act-total-banner");
+  if (bannerTotal) bannerTotal.innerText = formatNumber(s.activations_total || 0);
+
+  // 6 Dedicated KPI Cards
+  const actNewEl = document.getElementById("kpi-act-new");
+  if (actNewEl) actNewEl.innerText = formatNumber(s.activations_new || 0);
+
+  const telusPostEl = document.getElementById("kpi-act-telus-post");
+  if (telusPostEl) telusPostEl.innerText = formatNumber(s.activations_telus_post || 0);
+
+  const koodoPostEl = document.getElementById("kpi-act-koodo-post");
+  if (koodoPostEl) koodoPostEl.innerText = formatNumber(s.activations_koodo_post || 0);
+
+  const koodoPreEl = document.getElementById("kpi-act-koodo-pre");
+  if (koodoPreEl) koodoPreEl.innerText = formatNumber(s.activations_koodo_pre || 0);
+
+  const renewalsEl = document.getElementById("kpi-act-renewals");
+  if (renewalsEl) renewalsEl.innerText = formatNumber(s.activations_renewals || 0);
+
+  const migrationsEl = document.getElementById("kpi-act-migrations");
+  if (migrationsEl) migrationsEl.innerText = formatNumber(s.activations_migrations || 0);
+
+  // Doughnut Breakdown
   const ctx = document.getElementById("chart-activation-types");
   if (!ctx) return;
   if (charts.activationTypes) charts.activationTypes.destroy();
@@ -339,8 +468,8 @@ function updateActivationsTab(data) {
     data: {
       labels: ["New Activations", "Renewals", "Migrations"],
       datasets: [{
-        data: [s.activations_new, s.activations_renewals, s.activations_migrations],
-        backgroundColor: ["#8b5cf6", "#6366f1", "#06b6d4"],
+        data: [s.activations_new || 0, s.activations_renewals || 0, s.activations_migrations || 0],
+        backgroundColor: ["#a855f7", "#10b981", "#06b6d4"],
         borderColor: "#0e131f",
         borderWidth: 2
       }]
@@ -354,7 +483,7 @@ function updateActivationsTab(data) {
           display: true,
           color: "#ffffff",
           font: { weight: "bold", size: 11 },
-          formatter: (v, ctx) => {
+          formatter: (v) => {
             if (!v || totActs === 0) return "";
             const pct = Math.round((v / totActs) * 100);
             return `${v}\n(${pct}%)`;
@@ -368,10 +497,29 @@ function updateActivationsTab(data) {
 // 3. Update CPO Hardware Tab
 function updateCpoTab(data) {
   const s = data.summary || {};
-  document.getElementById("cpo-attach-rate-display").innerText = (s.cpo_attach_rate_pct || 0) + "%";
-  document.getElementById("disp-cpo-total").innerText = formatNumber(s.cpo_units_actual);
-  document.getElementById("disp-cpo-attached").innerText = formatNumber(s.cpo_attach_activations_count);
-  document.getElementById("disp-trade-ins").innerText = formatNumber(s.trade_in_units);
+  const cpoTot = document.getElementById("disp-cpo-total-tab");
+  if (cpoTot) cpoTot.innerText = formatNumber(s.cpo_units_actual || 0);
+
+  const cpoRev = document.getElementById("disp-cpo-rev-tab");
+  if (cpoRev) cpoRev.innerText = formatCurrency(s.cpo_revenue_actual || 0);
+
+  const cpoAtt = document.getElementById("disp-cpo-attached-tab");
+  if (cpoAtt) cpoAtt.innerText = formatNumber(s.cpo_attach_activations_count || 0);
+
+  const cpoTrade = document.getElementById("disp-cpo-tradeins-tab");
+  if (cpoTrade) cpoTrade.innerText = formatNumber(s.trade_in_units || 0);
+
+  const attachDisp = document.getElementById("cpo-attach-rate-display");
+  if (attachDisp) attachDisp.innerText = (s.cpo_attach_rate_pct || 0) + "%";
+
+  const dispTot = document.getElementById("disp-cpo-total");
+  if (dispTot) dispTot.innerText = formatNumber(s.cpo_units_actual || 0);
+
+  const dispAtt = document.getElementById("disp-cpo-attached");
+  if (dispAtt) dispAtt.innerText = formatNumber(s.cpo_attach_activations_count || 0);
+
+  const dispTrade = document.getElementById("disp-trade-ins");
+  if (dispTrade) dispTrade.innerText = formatNumber(s.trade_in_units || 0);
 }
 
 // 4. Update Repairs Tab
@@ -392,7 +540,7 @@ function updateRepairsTab(data) {
     data: {
       labels: ["Out of Warranty (OOW)", "Insurance Repairs"],
       datasets: [{
-        data: [s.repairs_oow_volume, s.repairs_insurance_volume],
+        data: [s.repairs_oow_volume || 0, s.repairs_insurance_volume || 0],
         backgroundColor: ["#f59e0b", "#06b6d4"],
         borderColor: "#0e131f",
         borderWidth: 2
@@ -407,7 +555,7 @@ function updateRepairsTab(data) {
           display: true,
           color: "#ffffff",
           font: { weight: "bold", size: 11 },
-          formatter: (v, ctx) => {
+          formatter: (v) => {
             if (!v || totRep === 0) return "";
             const pct = Math.round((v / totRep) * 100);
             return `${v}\n(${pct}%)`;
@@ -417,6 +565,7 @@ function updateRepairsTab(data) {
     }
   });
 }
+
 
 // 5. Update Accessories Tab
 function updateAccessoriesTab(data) {
@@ -536,75 +685,135 @@ function updateBenchmarkTab(data) {
   });
 }
 
-// Weekly Trends Fetcher & Visualizer with Datalabels
-async function loadWeeklyTrends(locParam) {
-  const metrics = [
-    { type: "activation", chartId: "chart-weekly-activations", color: "#8b5cf6", format: v => v },
-    { type: "cpo", chartId: "chart-weekly-cpo", color: "#10b981", format: v => v },
-    { type: "repair", chartId: "chart-weekly-repairs", color: "#f59e0b", format: v => v },
-    { type: "traffic", chartId: "chart-weekly-traffic", color: "#f43f5e", format: v => formatNumber(v) }
-  ];
+// Monthly Trends Fetcher & Visualizer with YoY / MoM Data (Req 3)
+async function loadMonthlyTrends(locParam) {
+  try {
+    const res = await fetch(`/api/monthly-trend?location_id=${locParam}`);
+    if (!res.ok) throw new Error("Failed to fetch monthly trends");
+    const data = await res.json();
+    const trend = data.trend || [];
+    const mom = data.mom || {};
+    const yoy = data.yoy || {};
 
-  for (const m of metrics) {
-    try {
-      const res = await fetch(`/api/weekly-trend?metric_type=${m.type}&location_id=${locParam}`);
-      if (!res.ok) continue;
-      const data = await res.json();
-      renderWeeklyLineChart(m.chartId, data.trend || [], m.color, m.format);
-    } catch (err) {
-      console.warn("Trend fetch error:", err);
-    }
+    // 1. Render Monthly Historical Charts
+    renderMonthlyActivationsChart(trend);
+    renderMonthlyCPOChart(trend);
+    renderMonthlyRepairsChart(trend);
+    renderMonthlyTrafficChart(trend);
+
+    // 2. Helper to format delta tags
+    const applyDelta = (elementId, deltaObj, label) => {
+      const el = document.getElementById(elementId);
+      if (!el) return;
+      if (!deltaObj || deltaObj.current === undefined) {
+        el.innerText = `${label}: --`;
+        el.className = "delta-tag neutral";
+        return;
+      }
+      const pct = deltaObj.pct !== undefined ? deltaObj.pct : 0;
+      const isPos = pct > 0;
+      const isNeg = pct < 0;
+      const sign = isPos ? "+" : "";
+      el.innerText = `${label}: ${sign}${pct}%`;
+      el.className = `delta-tag ${isPos ? "positive" : isNeg ? "negative" : "neutral"}`;
+      el.title = `Current: ${deltaObj.current}, Previous: ${deltaObj.previous}, Delta: ${deltaObj.delta}`;
+    };
+
+    // 3. Update MoM & YoY Badges across tabs
+    // Activations Tab
+    applyDelta("badge-act-mom", mom.activations, `MoM (${mom.previous_period || 'Prior Mo'})`);
+    applyDelta("badge-act-yoy", yoy.activations, `YoY (${yoy.prior_year_period || 'Last Yr'})`);
+
+    // CPO Tab
+    applyDelta("badge-cpo-units-mom", mom.cpo_units, "MoM");
+    applyDelta("badge-cpo-units-yoy", yoy.cpo_units, "YoY");
+    applyDelta("badge-cpo-rev-mom", mom.cpo_revenue, "MoM");
+    applyDelta("badge-cpo-rev-yoy", yoy.cpo_revenue, "YoY");
+    applyDelta("badge-cpo-mom", mom.cpo_units, `MoM (${mom.previous_period || 'Prior Mo'})`);
+    applyDelta("badge-cpo-yoy", yoy.cpo_units, `YoY (${yoy.prior_year_period || 'Last Yr'})`);
+
+    // Repairs Tab
+    applyDelta("badge-rep-rev-mom", mom.repairs_revenue, "MoM");
+    applyDelta("badge-rep-rev-yoy", yoy.repairs_revenue, "YoY");
+    applyDelta("badge-rep-mom", mom.repairs_volume, `MoM (${mom.previous_period || 'Prior Mo'})`);
+    applyDelta("badge-rep-yoy", yoy.repairs_volume, `YoY (${yoy.prior_year_period || 'Last Yr'})`);
+
+    // Traffic Tab
+    applyDelta("badge-traffic-mom", mom.traffic, `MoM (${mom.previous_period || 'Prior Mo'})`);
+    applyDelta("badge-traffic-yoy", yoy.traffic, `YoY (${yoy.prior_year_period || 'Last Yr'})`);
+
+  } catch (err) {
+    console.error("Error loading monthly trends:", err);
   }
 }
 
-function renderWeeklyLineChart(canvasId, trendData, color, formatter) {
-  const ctx = document.getElementById(canvasId);
+// Monthly Activations Historical Trend Chart (Req 1 & 3: New + Migrations = Total)
+function renderMonthlyActivationsChart(trend) {
+  const ctx = document.getElementById("chart-monthly-activations-trend");
   if (!ctx) return;
-  if (charts[canvasId]) charts[canvasId].destroy();
+  if (charts.monthlyActivations) charts.monthlyActivations.destroy();
 
-  const labels = trendData.map(t => {
-    // Format YYYY-MM-DD to readable Mon DD (e.g. Jan 05)
-    const parts = t.week_end_date.split("-");
-    if (parts.length === 3) {
-      const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-      const mIdx = parseInt(parts[1], 10) - 1;
-      return `${months[mIdx]} ${parts[2]}`;
-    }
-    return t.week_end_date;
-  });
-  const values = trendData.map(t => t.total);
+  const labels = trend.map(t => t.label);
+  const totalActs = trend.map(t => t.activations_total);
+  const newActs = trend.map(t => t.activations_new);
+  const migrations = trend.map(t => t.activations_migrations);
 
-  charts[canvasId] = new Chart(ctx, {
-    type: "line",
+  charts.monthlyActivations = new Chart(ctx, {
+    type: "bar",
     data: {
       labels: labels,
-      datasets: [{
-        label: "Weekly Volume",
-        data: values,
-        borderColor: color,
-        backgroundColor: color.replace(")", ", 0.1)").replace("rgb", "rgba"),
-        fill: true,
-        tension: 0.35,
-        pointBackgroundColor: color,
-        pointBorderColor: "#ffffff",
-        pointBorderWidth: 1.5,
-        pointRadius: 5,
-        pointHoverRadius: 7
-      }]
+      datasets: [
+        {
+          label: "New Activations",
+          data: newActs,
+          backgroundColor: "#a855f7",
+          stack: "actStack",
+          borderRadius: 4
+        },
+        {
+          label: "Migrations",
+          data: migrations,
+          backgroundColor: "#06b6d4",
+          stack: "actStack",
+          borderRadius: 4
+        },
+        {
+          label: "Total Activations (Act + Mig)",
+          data: totalActs,
+          type: "line",
+          borderColor: "#ec4899",
+          borderWidth: 2.5,
+          backgroundColor: "transparent",
+          pointBackgroundColor: "#ec4899",
+          pointRadius: 4,
+          tension: 0.3
+        }
+      ]
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      layout: { padding: { top: 22, right: 12 } },
+      layout: { padding: { top: 25 } },
       plugins: {
-        legend: { display: false },
+        legend: { labels: { color: "#94a3b8" } },
         datalabels: {
           display: true,
-          color: "#ffffff",
+          color: ctx => ctx.datasetIndex === 2 ? "#ffffff" : "transparent",
           align: "top",
-          offset: 6,
-          font: { weight: "700", size: 10 },
-          formatter: v => v > 0 ? (formatter ? formatter(v) : v) : ""
+          offset: 4,
+          font: { weight: "bold", size: 10 },
+          formatter: v => v > 0 ? v : ""
+        },
+        tooltip: {
+          callbacks: {
+            footer: (tooltipItems) => {
+              let sum = 0;
+              tooltipItems.forEach(item => {
+                if (item.datasetIndex === 0 || item.datasetIndex === 1) sum += item.raw;
+              });
+              return sum > 0 ? `Total (New + Mig): ${sum}` : "";
+            }
+          }
         }
       },
       scales: {
@@ -614,7 +823,239 @@ function renderWeeklyLineChart(canvasId, trendData, color, formatter) {
         },
         x: {
           grid: { display: false },
-          ticks: { color: "#94a3b8" }
+          ticks: { color: "#94a3b8", maxRotation: 45, minRotation: 20 }
+        }
+      }
+    }
+  });
+}
+
+// Monthly CPO Historical Trend Chart (Units & Revenue Dual-Axis)
+function renderMonthlyCPOChart(trend) {
+  const ctx = document.getElementById("chart-monthly-cpo-trend");
+  if (!ctx) return;
+  if (charts.monthlyCPO) charts.monthlyCPO.destroy();
+
+  const labels = trend.map(t => t.label);
+  const units = trend.map(t => t.cpo_units_actual);
+  const revenues = trend.map(t => t.cpo_revenue_actual);
+
+  charts.monthlyCPO = new Chart(ctx, {
+    type: "bar",
+    data: {
+      labels: labels,
+      datasets: [
+        {
+          label: "CPO Units Sold",
+          data: units,
+          backgroundColor: "#10b981",
+          borderRadius: 6,
+          yAxisID: "y"
+        },
+        {
+          label: "CPO Revenue ($)",
+          data: revenues,
+          type: "line",
+          borderColor: "#06b6d4",
+          backgroundColor: "rgba(6, 182, 212, 0.1)",
+          fill: false,
+          tension: 0.3,
+          borderWidth: 2.5,
+          pointBackgroundColor: "#06b6d4",
+          pointRadius: 4,
+          yAxisID: "y1"
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      layout: { padding: { top: 25 } },
+      plugins: {
+        legend: { labels: { color: "#94a3b8" } },
+        datalabels: {
+          display: true,
+          font: { weight: "bold", size: 9 },
+          align: "top",
+          offset: 3,
+          color: ctx => ctx.datasetIndex === 0 ? "#6ee7b7" : "#67e8f9",
+          formatter: (v, ctx) => ctx.datasetIndex === 0 ? (v > 0 ? v : "") : (v > 0 ? formatCompactCurrency(v) : "")
+        }
+      },
+      scales: {
+        y: {
+          type: "linear",
+          position: "left",
+          grid: { color: "rgba(255,255,255,0.05)" },
+          ticks: { color: "#10b981" }
+        },
+        y1: {
+          type: "linear",
+          position: "right",
+          grid: { display: false },
+          ticks: { color: "#06b6d4", callback: v => "$" + (v / 1000) + "k" }
+        },
+        x: {
+          grid: { display: false },
+          ticks: { color: "#94a3b8", maxRotation: 45, minRotation: 20 }
+        }
+      }
+    }
+  });
+}
+
+// Monthly Repairs Historical Trend Chart (OOW vs Insurance & Revenue)
+function renderMonthlyRepairsChart(trend) {
+  const ctx = document.getElementById("chart-monthly-repairs-trend");
+  if (!ctx) return;
+  if (charts.monthlyRepairs) charts.monthlyRepairs.destroy();
+
+  const labels = trend.map(t => t.label);
+  const oow = trend.map(t => t.repairs_oow_volume);
+  const ins = trend.map(t => t.repairs_insurance_volume);
+  const revenues = trend.map(t => t.repairs_total_revenue);
+
+  charts.monthlyRepairs = new Chart(ctx, {
+    type: "bar",
+    data: {
+      labels: labels,
+      datasets: [
+        {
+          label: "Out of Warranty (OOW)",
+          data: oow,
+          backgroundColor: "#f59e0b",
+          stack: "repStack",
+          borderRadius: 4,
+          yAxisID: "y"
+        },
+        {
+          label: "Insurance Repairs",
+          data: ins,
+          backgroundColor: "#06b6d4",
+          stack: "repStack",
+          borderRadius: 4,
+          yAxisID: "y"
+        },
+        {
+          label: "Total Repair Revenue ($)",
+          data: revenues,
+          type: "line",
+          borderColor: "#3b82f6",
+          borderWidth: 2.5,
+          backgroundColor: "transparent",
+          pointBackgroundColor: "#3b82f6",
+          pointRadius: 4,
+          tension: 0.3,
+          yAxisID: "y1"
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      layout: { padding: { top: 25 } },
+      plugins: {
+        legend: { labels: { color: "#94a3b8" } },
+        datalabels: {
+          display: true,
+          color: ctx => ctx.datasetIndex === 2 ? "#93c5fd" : "transparent",
+          align: "top",
+          offset: 4,
+          font: { weight: "bold", size: 9 },
+          formatter: (v, ctx) => ctx.datasetIndex === 2 && v > 0 ? formatCompactCurrency(v) : ""
+        }
+      },
+      scales: {
+        y: {
+          type: "linear",
+          position: "left",
+          grid: { color: "rgba(255,255,255,0.05)" },
+          ticks: { color: "#f59e0b" }
+        },
+        y1: {
+          type: "linear",
+          position: "right",
+          grid: { display: false },
+          ticks: { color: "#3b82f6", callback: v => "$" + (v / 1000) + "k" }
+        },
+        x: {
+          grid: { display: false },
+          ticks: { color: "#94a3b8", maxRotation: 45, minRotation: 20 }
+        }
+      }
+    }
+  });
+}
+
+// Monthly Foot Traffic & Conversion Rate Historical Trend Chart
+function renderMonthlyTrafficChart(trend) {
+  const ctx = document.getElementById("chart-monthly-traffic-trend");
+  if (!ctx) return;
+  if (charts.monthlyTraffic) charts.monthlyTraffic.destroy();
+
+  const labels = trend.map(t => t.label);
+  const traffic = trend.map(t => t.foot_traffic_total);
+  const convRates = trend.map(t => t.conversion_rate_pct);
+
+  charts.monthlyTraffic = new Chart(ctx, {
+    type: "bar",
+    data: {
+      labels: labels,
+      datasets: [
+        {
+          label: "Door Traffic",
+          data: traffic,
+          backgroundColor: "rgba(244, 63, 94, 0.65)",
+          borderColor: "#f43f5e",
+          borderWidth: 1,
+          borderRadius: 6,
+          yAxisID: "y"
+        },
+        {
+          label: "Conversion Rate (%)",
+          data: convRates,
+          type: "line",
+          borderColor: "#10b981",
+          backgroundColor: "transparent",
+          borderWidth: 2.5,
+          pointBackgroundColor: "#10b981",
+          pointRadius: 4,
+          tension: 0.3,
+          yAxisID: "y1"
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      layout: { padding: { top: 25 } },
+      plugins: {
+        legend: { labels: { color: "#94a3b8" } },
+        datalabels: {
+          display: true,
+          font: { weight: "bold", size: 9 },
+          align: "top",
+          offset: 3,
+          color: ctx => ctx.datasetIndex === 0 ? "#fda4af" : "#6ee7b7",
+          formatter: (v, ctx) => ctx.datasetIndex === 0 ? (v > 0 ? formatNumber(v) : "") : (v > 0 ? v + "%" : "")
+        }
+      },
+      scales: {
+        y: {
+          type: "linear",
+          position: "left",
+          grid: { color: "rgba(255,255,255,0.05)" },
+          ticks: { color: "#f43f5e", callback: v => (v >= 1000 ? (v / 1000).toFixed(0) + "k" : v) }
+        },
+        y1: {
+          type: "linear",
+          position: "right",
+          grid: { display: false },
+          ticks: { color: "#10b981", callback: v => v + "%" }
+        },
+        x: {
+          grid: { display: false },
+          ticks: { color: "#94a3b8", maxRotation: 45, minRotation: 20 }
         }
       }
     }

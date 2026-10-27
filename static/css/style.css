@@ -582,3 +582,161 @@ body {
 #store-checkboxes-list::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.3);
 }
+
+/* Clickable Widgets & Redirection Cue */
+.clickable-card {
+  cursor: pointer;
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease, border-color 0.2s ease;
+  position: relative;
+}
+
+.clickable-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 28px -6px rgba(0, 0, 0, 0.6), 0 0 0 1px var(--card-accent, rgba(99, 102, 241, 0.4)) !important;
+}
+
+.clickable-card .card-redirect-indicator {
+  position: absolute;
+  bottom: 8px;
+  right: 12px;
+  font-size: 0.7rem;
+  color: var(--text-dim);
+  opacity: 0;
+  transform: translateX(-4px);
+  transition: opacity 0.2s ease, transform 0.2s ease, color 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-weight: 600;
+  pointer-events: none;
+}
+
+.clickable-card:hover .card-redirect-indicator {
+  opacity: 1;
+  transform: translateX(0);
+  color: var(--card-accent, #ffffff);
+}
+
+/* Benchmark Switcher Buttons */
+.benchmark-btn-group {
+  display: inline-flex;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-sm);
+  padding: 2px;
+  gap: 2px;
+}
+
+.bm-toggle-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  padding: 4px 10px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.bm-toggle-btn:hover {
+  color: var(--text-main);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.bm-toggle-btn.active {
+  background: var(--accent-indigo);
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.35);
+}
+
+/* Store Performance Leaderboard Top 3 Badges & Highlight */
+.rank-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 9999px;
+  min-width: 32px;
+  line-height: 1.2;
+}
+
+.rank-badge.rank-1 {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.4), rgba(217, 119, 6, 0.2));
+  border: 1px solid #f59e0b;
+  color: #fbbf24;
+  box-shadow: 0 0 12px rgba(245, 158, 11, 0.35);
+}
+
+.rank-badge.rank-2 {
+  background: linear-gradient(135deg, rgba(148, 163, 184, 0.35), rgba(100, 116, 139, 0.2));
+  border: 1px solid #cbd5e1;
+  color: #f1f5f9;
+  box-shadow: 0 0 10px rgba(148, 163, 184, 0.3);
+}
+
+.rank-badge.rank-3 {
+  background: linear-gradient(135deg, rgba(180, 83, 9, 0.35), rgba(120, 53, 15, 0.2));
+  border: 1px solid #d97706;
+  color: #fde68a;
+  box-shadow: 0 0 10px rgba(217, 119, 6, 0.3);
+}
+
+.rank-badge.rank-default {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-dim);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+tr.top-performer.rank-1 {
+  background: linear-gradient(90deg, rgba(245, 158, 11, 0.12) 0%, rgba(245, 158, 11, 0.02) 100%) !important;
+}
+
+tr.top-performer.rank-2 {
+  background: linear-gradient(90deg, rgba(148, 163, 184, 0.1) 0%, rgba(148, 163, 184, 0.02) 100%) !important;
+}
+
+tr.top-performer.rank-3 {
+  background: linear-gradient(90deg, rgba(217, 119, 6, 0.08) 0%, rgba(217, 119, 6, 0.02) 100%) !important;
+}
+
+/* KPI Grids & Delta Tags */
+.kpi-grid-6 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 14px;
+}
+
+.kpi-grid-4 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 14px;
+}
+
+.delta-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.delta-tag.positive {
+  background: rgba(16, 185, 129, 0.15);
+  color: #6ee7b7;
+}
+
+.delta-tag.negative {
+  background: rgba(244, 63, 94, 0.15);
+  color: #fda4af;
+}
+
+.delta-tag.neutral {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-dim);
+}
+

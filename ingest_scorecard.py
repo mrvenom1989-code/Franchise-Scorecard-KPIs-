@@ -275,6 +275,8 @@ def parse_monthly_sheet(ws, sheet_name):
             ["all activations", "mtd", "migrations"],
             forbidden=["mom", "yoy"]
         )))
+        # Requirement: Total Activations is Total New Activations + Migrations
+        record["kpis"]["activations_total"] = record["kpis"]["activations_new"] + record["kpis"]["activations_migrations"]
         record["kpis"]["activations_telus_post"] = int(clean_num(get_val(
             ["tpost"],
             ["telus post"],
