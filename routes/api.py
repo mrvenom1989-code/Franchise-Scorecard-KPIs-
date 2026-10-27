@@ -449,6 +449,83 @@ def get_monthly_trend():
             pct = round((diff / p_val * 100), 1) if p_val > 0 else (100.0 if diff > 0 else 0.0)
             return {"current": c_val, "previous": p_val, "delta": round(diff, 2), "pct": pct}
 
+        # Attach prior year matching metrics to each period in trend_list
+        for item in trend_list:
+            try:
+                i_year, i_month = int(item["start_date"][:4]), int(item["start_date"][5:7])
+                target_year = i_year - 1
+                py_match = next((t for t in trend_list if int(t["start_date"][:4]) == target_year and int(t["start_date"][5:7]) == i_month), None)
+            except Exception:
+                py_match = None
+
+            if py_match:
+                item["py_label"] = py_match["label"]
+                item["py_revenue"] = py_match["gross_revenue_actual"]
+                item["py_activations"] = py_match["activations_total"]
+                item["py_cpo_units"] = py_match["cpo_units_actual"]
+                item["py_cpo_revenue"] = py_match["cpo_revenue_actual"]
+                item["py_repairs_volume"] = py_match["repairs_total_volume"]
+                item["py_repairs_revenue"] = py_match["repairs_total_revenue"]
+                item["py_traffic"] = py_match["foot_traffic_total"]
+                item["py_conversion_rate_pct"] = py_match["conversion_rate_pct"]
+                item["yoy_growth_revenue_pct"] = calc_delta(item["gross_revenue_actual"], py_match["gross_revenue_actual"])["pct"]
+                item["yoy_growth_activations_pct"] = calc_delta(item["activations_total"], py_match["activations_total"])["pct"]
+                item["yoy_growth_cpo_pct"] = calc_delta(item["cpo_units_actual"], py_match["cpo_units_actual"])["pct"]
+                item["yoy_growth_repairs_pct"] = calc_delta(item["repairs_total_volume"], py_match["repairs_total_volume"])["pct"]
+                item["yoy_growth_traffic_pct"] = calc_delta(item["foot_traffic_total"], py_match["foot_traffic_total"])["pct"]
+            else:
+                item["py_label"] = None
+                item["py_revenue"] = None
+                item["py_activations"] = None
+                item["py_cpo_units"] = None
+                item["py_cpo_revenue"] = None
+                item["py_repairs_volume"] = None
+                item["py_repairs_revenue"] = None
+                item["py_traffic"] = None
+                item["py_conversion_rate_pct"] = None
+                item["yoy_growth_revenue_pct"] = None
+                item["yoy_growth_activations_pct"] = None
+                item["yoy_growth_cpo_pct"] = None
+                item["yoy_growth_repairs_pct"] = None
+                item["yoy_growth_traffic_pct"] = None
+
+        # Build 12-Month Calendar Comparison (2025 vs 2026 by Month)
+        month_names = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+        yoy_by_month = []
+        for m_idx, m_name in enumerate(month_names, 1):
+            p25 = next((t for t in trend_list if int(t["start_date"][:4]) == 2025 and int(t["start_date"][5:7]) == m_idx), None)
+            p26 = next((t for t in trend_list if int(t["start_date"][:4]) == 2026 and int(t["start_date"][5:7]) == m_idx), None)
+
+            yoy_by_month.append({
+                "month_num": m_idx,
+                "month_name": m_name,
+                "p2025": {
+                    "label": p25["label"],
+                    "revenue": p25["gross_revenue_actual"],
+                    "activations": p25["activations_total"],
+                    "cpo_units": p25["cpo_units_actual"],
+                    "repairs_volume": p25["repairs_total_volume"],
+                    "traffic": p25["foot_traffic_total"],
+                    "conversion_rate_pct": p25["conversion_rate_pct"]
+                } if p25 else None,
+                "p2026": {
+                    "label": p26["label"],
+                    "revenue": p26["gross_revenue_actual"],
+                    "activations": p26["activations_total"],
+                    "cpo_units": p26["cpo_units_actual"],
+                    "repairs_volume": p26["repairs_total_volume"],
+                    "traffic": p26["foot_traffic_total"],
+                    "conversion_rate_pct": p26["conversion_rate_pct"]
+                } if p26 else None,
+                "growth": {
+                    "revenue_pct": calc_delta(p26["gross_revenue_actual"], p25["gross_revenue_actual"])["pct"] if (p25 and p26) else None,
+                    "activations_pct": calc_delta(p26["activations_total"], p25["activations_total"])["pct"] if (p25 and p26) else None,
+                    "cpo_pct": calc_delta(p26["cpo_units_actual"], p25["cpo_units_actual"])["pct"] if (p25 and p26) else None,
+                    "repairs_pct": calc_delta(p26["repairs_total_volume"], p25["repairs_total_volume"])["pct"] if (p25 and p26) else None,
+                    "traffic_pct": calc_delta(p26["foot_traffic_total"], p25["foot_traffic_total"])["pct"] if (p25 and p26) else None,
+                }
+            })
+
         # MoM (Month-on-Month) deltas for the latest period vs previous period
         mom = {}
         if len(trend_list) >= 2:
@@ -498,8 +575,45 @@ def get_monthly_trend():
                     "conversion_rate": calc_delta(curr["conversion_rate_pct"], prior_year_match["conversion_rate_pct"])
                 }
 
+        # Growth Matrix for Executive Pulse Table
+        growth_matrix = []
+        if trend_list:
+            curr = trend_list[-1]
+            prev = trend_list[-2] if len(trend_list) >= 2 else None
+            py = next((t for t in trend_list if int(t["start_date"][:4]) == int(curr["start_date"][:4]) - 1 and int(t["start_date"][5:7]) == int(curr["start_date"][5:7])), None)
+
+            metrics_def = [
+                ("Gross Revenue", "revenue", "currency", curr["gross_revenue_actual"], prev["gross_revenue_actual"] if prev else None, py["gross_revenue_actual"] if py else None),
+                ("Total Activations", "activations", "number", curr["activations_total"], prev["activations_total"] if prev else None, py["activations_total"] if py else None),
+                ("CPO Units Sold", "cpo_units", "number", curr["cpo_units_actual"], prev["cpo_units_actual"] if prev else None, py["cpo_units_actual"] if py else None),
+                ("Total Repairs", "repairs", "number", curr["repairs_total_volume"], prev["repairs_total_volume"] if prev else None, py["repairs_total_volume"] if py else None),
+                ("Foot Traffic", "traffic", "number", curr["foot_traffic_total"], prev["foot_traffic_total"] if prev else None, py["foot_traffic_total"] if py else None),
+                ("Conversion Rate", "conversion", "percent", curr["conversion_rate_pct"], prev["conversion_rate_pct"] if prev else None, py["conversion_rate_pct"] if py else None),
+            ]
+
+            for name, key, fmt, c_v, p_v, py_v in metrics_def:
+                m_delta = calc_delta(c_v, p_v) if p_v is not None else None
+                y_delta = calc_delta(c_v, py_v) if py_v is not None else None
+                growth_matrix.append({
+                    "name": name,
+                    "key": key,
+                    "format": fmt,
+                    "current": c_v,
+                    "current_period": curr["label"],
+                    "mom_previous": p_v,
+                    "mom_period": prev["label"] if prev else None,
+                    "mom_pct": m_delta["pct"] if m_delta else None,
+                    "mom_delta": m_delta["delta"] if m_delta else None,
+                    "yoy_previous": py_v,
+                    "yoy_period": py["label"] if py else None,
+                    "yoy_pct": y_delta["pct"] if y_delta else None,
+                    "yoy_delta": y_delta["delta"] if y_delta else None,
+                })
+
         return jsonify({
             "trend": trend_list,
+            "yoy_by_month": yoy_by_month,
+            "growth_matrix": growth_matrix,
             "mom": mom,
             "yoy": yoy
         })

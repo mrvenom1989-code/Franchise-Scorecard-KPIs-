@@ -11,6 +11,14 @@ if (window.ChartDataLabels) {
 let charts = {};
 let currentScorecardData = null;
 let currentBenchmarkMode = "regional"; // 'regional', 'global', 'portfolio', 'compare_all'
+let chartModes = {
+  revenue: "timeline",
+  activations: "timeline",
+  cpo: "timeline",
+  repairs: "timeline",
+  traffic: "timeline"
+};
+let monthlyTrendsData = null;
 
 document.addEventListener("DOMContentLoaded", function () {
   loadDashboardData();
@@ -685,23 +693,50 @@ function updateBenchmarkTab(data) {
   });
 }
 
+// Chart View Switcher: Toggle between 'timeline' (14-Mo Trend) and 'yoy' (2025 vs 2026 Overlay)
+function setChartViewMode(metric, mode, btn) {
+  chartModes[metric] = mode;
+  const switcher = document.getElementById(`switcher-${metric}`);
+  if (switcher) {
+    switcher.querySelectorAll(".chart-view-btn").forEach(b => {
+      b.classList.toggle("active", b === btn);
+    });
+  }
+  if (!monthlyTrendsData) return;
+  const trend = monthlyTrendsData.trend || [];
+  const yoyByMonth = monthlyTrendsData.yoy_by_month || [];
+
+  if (metric === "revenue") renderExecutiveRevenueTrendChart(trend, yoyByMonth, mode);
+  else if (metric === "activations") renderMonthlyActivationsChart(trend, yoyByMonth, mode);
+  else if (metric === "cpo") renderMonthlyCPOChart(trend, yoyByMonth, mode);
+  else if (metric === "repairs") renderMonthlyRepairsChart(trend, yoyByMonth, mode);
+  else if (metric === "traffic") renderMonthlyTrafficChart(trend, yoyByMonth, mode);
+}
+
 // Monthly Trends Fetcher & Visualizer with YoY / MoM Data (Req 3)
 async function loadMonthlyTrends(locParam) {
   try {
     const res = await fetch(`/api/monthly-trend?location_id=${locParam}`);
     if (!res.ok) throw new Error("Failed to fetch monthly trends");
     const data = await res.json();
+    monthlyTrendsData = data;
     const trend = data.trend || [];
+    const yoyByMonth = data.yoy_by_month || [];
+    const growthMatrix = data.growth_matrix || [];
     const mom = data.mom || {};
     const yoy = data.yoy || {};
 
-    // 1. Render Monthly Historical Charts
-    renderMonthlyActivationsChart(trend);
-    renderMonthlyCPOChart(trend);
-    renderMonthlyRepairsChart(trend);
-    renderMonthlyTrafficChart(trend);
+    // 1. Render Executive Pulse Growth Matrix (YoY & MoM Comparative Breakdown)
+    renderExecutiveGrowthMatrix(growthMatrix, mom, yoy);
 
-    // 2. Helper to format delta tags
+    // 2. Render Charts across all tabs (with Timeline & YoY modes)
+    renderExecutiveRevenueTrendChart(trend, yoyByMonth, chartModes.revenue);
+    renderMonthlyActivationsChart(trend, yoyByMonth, chartModes.activations);
+    renderMonthlyCPOChart(trend, yoyByMonth, chartModes.cpo);
+    renderMonthlyRepairsChart(trend, yoyByMonth, chartModes.repairs);
+    renderMonthlyTrafficChart(trend, yoyByMonth, chartModes.traffic);
+
+    // 3. Helper to format delta tags
     const applyDelta = (elementId, deltaObj, label) => {
       const el = document.getElementById(elementId);
       if (!el) return;
@@ -719,12 +754,14 @@ async function loadMonthlyTrends(locParam) {
       el.title = `Current: ${deltaObj.current}, Previous: ${deltaObj.previous}, Delta: ${deltaObj.delta}`;
     };
 
-    // 3. Update MoM & YoY Badges across tabs
-    // Activations Tab
+    // 4. Update Executive Pulse Header Badges
+    applyDelta("badge-exec-rev-yoy", yoy.revenue, "Revenue YoY");
+    applyDelta("badge-exec-act-yoy", yoy.activations, "Activations YoY");
+
+    // 5. Update MoM & YoY Badges across detail tabs
     applyDelta("badge-act-mom", mom.activations, `MoM (${mom.previous_period || 'Prior Mo'})`);
     applyDelta("badge-act-yoy", yoy.activations, `YoY (${yoy.prior_year_period || 'Last Yr'})`);
 
-    // CPO Tab
     applyDelta("badge-cpo-units-mom", mom.cpo_units, "MoM");
     applyDelta("badge-cpo-units-yoy", yoy.cpo_units, "YoY");
     applyDelta("badge-cpo-rev-mom", mom.cpo_revenue, "MoM");
@@ -732,13 +769,11 @@ async function loadMonthlyTrends(locParam) {
     applyDelta("badge-cpo-mom", mom.cpo_units, `MoM (${mom.previous_period || 'Prior Mo'})`);
     applyDelta("badge-cpo-yoy", yoy.cpo_units, `YoY (${yoy.prior_year_period || 'Last Yr'})`);
 
-    // Repairs Tab
     applyDelta("badge-rep-rev-mom", mom.repairs_revenue, "MoM");
     applyDelta("badge-rep-rev-yoy", yoy.repairs_revenue, "YoY");
     applyDelta("badge-rep-mom", mom.repairs_volume, `MoM (${mom.previous_period || 'Prior Mo'})`);
     applyDelta("badge-rep-yoy", yoy.repairs_volume, `YoY (${yoy.prior_year_period || 'Last Yr'})`);
 
-    // Traffic Tab
     applyDelta("badge-traffic-mom", mom.traffic, `MoM (${mom.previous_period || 'Prior Mo'})`);
     applyDelta("badge-traffic-yoy", yoy.traffic, `YoY (${yoy.prior_year_period || 'Last Yr'})`);
 
@@ -747,320 +782,933 @@ async function loadMonthlyTrends(locParam) {
   }
 }
 
-// Monthly Activations Historical Trend Chart (Req 1 & 3: New + Migrations = Total)
-function renderMonthlyActivationsChart(trend) {
+// Executive Pulse: Render Year-on-Year (YoY) & Month-on-Month (MoM) Growth Matrix
+function renderExecutiveGrowthMatrix(matrix, mom, yoy) {
+  const container = document.getElementById("exec-growth-matrix-grid");
+  if (!container) return;
+
+  const currLbl = document.getElementById("matrix-curr-lbl");
+  if (currLbl && mom.current_period) currLbl.innerText = mom.current_period;
+
+  const momLbl = document.getElementById("matrix-mom-lbl");
+  if (momLbl && mom.previous_period) momLbl.innerText = mom.previous_period;
+
+  const yoyLbl = document.getElementById("matrix-yoy-lbl");
+  if (yoyLbl && yoy.prior_year_period) yoyLbl.innerText = yoy.prior_year_period;
+
+  if (!matrix || matrix.length === 0) {
+    container.innerHTML = `<div style="color:var(--text-dim);font-size:0.85rem;padding:12px;">Growth metrics loading...</div>`;
+    return;
+  }
+
+  container.innerHTML = "";
+  matrix.forEach(m => {
+    let fmtVal = "";
+    if (m.format === "currency") fmtVal = formatCurrency(m.current);
+    else if (m.format === "percent") fmtVal = (m.current || 0) + "%";
+    else fmtVal = formatNumber(m.current);
+
+    const momPct = m.mom_pct !== null && m.mom_pct !== undefined ? m.mom_pct : 0;
+    const momClass = momPct > 0 ? "positive" : (momPct < 0 ? "negative" : "neutral");
+    const momSign = momPct > 0 ? "+" : "";
+
+    const yoyPct = m.yoy_pct !== null && m.yoy_pct !== undefined ? m.yoy_pct : 0;
+    const yoyClass = yoyPct > 0 ? "positive" : (yoyPct < 0 ? "negative" : "neutral");
+    const yoySign = yoyPct > 0 ? "+" : "";
+
+    let momPrevFmt = "";
+    if (m.mom_previous !== null && m.mom_previous !== undefined) {
+      momPrevFmt = m.format === "currency" ? formatCompactCurrency(m.mom_previous) : (m.format === "percent" ? m.mom_previous + "%" : formatNumber(m.mom_previous));
+    } else {
+      momPrevFmt = "--";
+    }
+
+    let yoyPrevFmt = "";
+    if (m.yoy_previous !== null && m.yoy_previous !== undefined) {
+      yoyPrevFmt = m.format === "currency" ? formatCompactCurrency(m.yoy_previous) : (m.format === "percent" ? m.yoy_previous + "%" : formatNumber(m.yoy_previous));
+    } else {
+      yoyPrevFmt = "--";
+    }
+
+    const card = document.createElement("div");
+    card.className = "growth-card";
+    card.innerHTML = `
+      <div class="growth-card-header">
+        <span class="growth-card-title">${m.name}</span>
+        <span class="role-pill" style="font-size:0.68rem;background:rgba(255,255,255,0.05);">${m.current_period || ''}</span>
+      </div>
+      <div class="growth-card-val">${fmtVal}</div>
+      <div class="growth-comparisons">
+        <div class="growth-row">
+          <span class="growth-row-label">
+            <i data-feather="calendar" style="width:12px;height:12px;"></i> MoM (${m.mom_period || 'Prior Mo'}):
+          </span>
+          <span class="growth-row-value">
+            <span style="color:var(--text-muted);">${momPrevFmt}</span>
+            <span class="delta-tag ${momClass}">${momSign}${momPct}%</span>
+          </span>
+        </div>
+        <div class="growth-row">
+          <span class="growth-row-label">
+            <i data-feather="clock" style="width:12px;height:12px;"></i> YoY (${m.yoy_period || 'Prior Yr'}):
+          </span>
+          <span class="growth-row-value">
+            <span style="color:var(--text-muted);">${yoyPrevFmt}</span>
+            <span class="delta-tag ${yoyClass}">${yoySign}${yoyPct}%</span>
+          </span>
+        </div>
+      </div>
+    `;
+    container.appendChild(card);
+  });
+
+  if (window.feather) feather.replace();
+}
+
+// Executive Monthly Revenue Trend & YoY Comparison Chart
+function renderExecutiveRevenueTrendChart(trend, yoyByMonth, mode) {
+  const ctx = document.getElementById("chart-executive-revenue-trend");
+  if (!ctx) return;
+  if (charts.executiveRevenue) charts.executiveRevenue.destroy();
+
+  if (mode === "yoy") {
+    const labels = yoyByMonth.map(m => m.month_name);
+    const data2025 = yoyByMonth.map(m => m.p2025 ? m.p2025.revenue : null);
+    const data2026 = yoyByMonth.map(m => m.p2026 ? m.p2026.revenue : null);
+
+    charts.executiveRevenue = new Chart(ctx, {
+      type: "bar",
+      data: {
+        labels: labels,
+        datasets: [
+          {
+            label: "2025 Revenue (Prior Year)",
+            data: data2025,
+            backgroundColor: "rgba(245, 158, 11, 0.55)",
+            borderColor: "#f59e0b",
+            borderWidth: 1.5,
+            borderRadius: 4
+          },
+          {
+            label: "2026 Revenue (Current Year)",
+            data: data2026,
+            backgroundColor: "#10b981",
+            borderColor: "#34d399",
+            borderWidth: 1.5,
+            borderRadius: 4
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        layout: { padding: { top: 25 } },
+        plugins: {
+          legend: { labels: { color: "#94a3b8" } },
+          datalabels: {
+            display: true,
+            font: { weight: "bold", size: 8 },
+            align: "top",
+            offset: 2,
+            color: ctx => ctx.datasetIndex === 0 ? "#fbbf24" : "#6ee7b7",
+            formatter: (v) => v > 0 ? formatCompactCurrency(v) : ""
+          },
+          tooltip: {
+            callbacks: {
+              afterBody: (items) => {
+                const idx = items[0].dataIndex;
+                const m = yoyByMonth[idx];
+                if (m && m.growth && m.growth.revenue_pct !== null) {
+                  const s = m.growth.revenue_pct > 0 ? "+" : "";
+                  return `YoY Growth: ${s}${m.growth.revenue_pct}%`;
+                }
+                return "";
+              }
+            }
+          }
+        },
+        scales: {
+          y: {
+            grid: { color: "rgba(255,255,255,0.05)" },
+            ticks: { color: "#10b981", callback: v => "$" + (v / 1000) + "k" }
+          },
+          x: {
+            grid: { display: false },
+            ticks: { color: "#94a3b8" }
+          }
+        }
+      }
+    });
+  } else {
+    const labels = trend.map(t => t.label);
+    const revenues = trend.map(t => t.gross_revenue_actual);
+    const pyRevenues = trend.map(t => t.py_revenue || null);
+
+    charts.executiveRevenue = new Chart(ctx, {
+      type: "bar",
+      data: {
+        labels: labels,
+        datasets: [
+          {
+            label: "Gross Revenue ($)",
+            data: revenues,
+            backgroundColor: "#10b981",
+            borderRadius: 6,
+            order: 2
+          },
+          {
+            label: "Prior Year Baseline (YoY)",
+            data: pyRevenues,
+            type: "line",
+            borderColor: "#f59e0b",
+            borderWidth: 2,
+            borderDash: [5, 4],
+            backgroundColor: "transparent",
+            pointBackgroundColor: "#f59e0b",
+            pointRadius: 5,
+            pointHoverRadius: 7,
+            order: 1
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        layout: { padding: { top: 25 } },
+        plugins: {
+          legend: { labels: { color: "#94a3b8" } },
+          datalabels: {
+            display: true,
+            font: { weight: "bold", size: 8 },
+            align: "top",
+            offset: 2,
+            color: ctx => ctx.datasetIndex === 0 ? "#6ee7b7" : "transparent",
+            formatter: (v) => v > 0 ? formatCompactCurrency(v) : ""
+          },
+          tooltip: {
+            callbacks: {
+              afterLabel: (ctx) => {
+                const item = trend[ctx.dataIndex];
+                if (item && item.yoy_growth_revenue_pct !== null && ctx.datasetIndex === 0) {
+                  const s = item.yoy_growth_revenue_pct > 0 ? "+" : "";
+                  return `YoY Growth vs ${item.py_label}: ${s}${item.yoy_growth_revenue_pct}%`;
+                }
+                return "";
+              }
+            }
+          }
+        },
+        scales: {
+          y: {
+            grid: { color: "rgba(255,255,255,0.05)" },
+            ticks: { color: "#10b981", callback: v => "$" + (v / 1000) + "k" }
+          },
+          x: {
+            grid: { display: false },
+            ticks: { color: "#94a3b8", maxRotation: 45, minRotation: 20 }
+          }
+        }
+      }
+    });
+  }
+}
+
+// Monthly Activations Historical Trend Chart (Req 1 & 3: New + Migrations = Total with YoY)
+function renderMonthlyActivationsChart(trend, yoyByMonth, mode) {
   const ctx = document.getElementById("chart-monthly-activations-trend");
   if (!ctx) return;
   if (charts.monthlyActivations) charts.monthlyActivations.destroy();
 
-  const labels = trend.map(t => t.label);
-  const totalActs = trend.map(t => t.activations_total);
-  const newActs = trend.map(t => t.activations_new);
-  const migrations = trend.map(t => t.activations_migrations);
+  if (mode === "yoy") {
+    const labels = yoyByMonth.map(m => m.month_name);
+    const data2025 = yoyByMonth.map(m => m.p2025 ? m.p2025.activations : null);
+    const data2026 = yoyByMonth.map(m => m.p2026 ? m.p2026.activations : null);
 
-  charts.monthlyActivations = new Chart(ctx, {
-    type: "bar",
-    data: {
-      labels: labels,
-      datasets: [
-        {
-          label: "New Activations",
-          data: newActs,
-          backgroundColor: "#a855f7",
-          stack: "actStack",
-          borderRadius: 4
-        },
-        {
-          label: "Migrations",
-          data: migrations,
-          backgroundColor: "#06b6d4",
-          stack: "actStack",
-          borderRadius: 4
-        },
-        {
-          label: "Total Activations (Act + Mig)",
-          data: totalActs,
-          type: "line",
-          borderColor: "#ec4899",
-          borderWidth: 2.5,
-          backgroundColor: "transparent",
-          pointBackgroundColor: "#ec4899",
-          pointRadius: 4,
-          tension: 0.3
-        }
-      ]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      layout: { padding: { top: 25 } },
-      plugins: {
-        legend: { labels: { color: "#94a3b8" } },
-        datalabels: {
-          display: true,
-          color: ctx => ctx.datasetIndex === 2 ? "#ffffff" : "transparent",
-          align: "top",
-          offset: 4,
-          font: { weight: "bold", size: 10 },
-          formatter: v => v > 0 ? v : ""
-        },
-        tooltip: {
-          callbacks: {
-            footer: (tooltipItems) => {
-              let sum = 0;
-              tooltipItems.forEach(item => {
-                if (item.datasetIndex === 0 || item.datasetIndex === 1) sum += item.raw;
-              });
-              return sum > 0 ? `Total (New + Mig): ${sum}` : "";
+    charts.monthlyActivations = new Chart(ctx, {
+      type: "bar",
+      data: {
+        labels: labels,
+        datasets: [
+          {
+            label: "2025 Total Activations",
+            data: data2025,
+            backgroundColor: "rgba(245, 158, 11, 0.55)",
+            borderColor: "#f59e0b",
+            borderWidth: 1.5,
+            borderRadius: 4
+          },
+          {
+            label: "2026 Total Activations",
+            data: data2026,
+            backgroundColor: "#a855f7",
+            borderColor: "#c084fc",
+            borderWidth: 1.5,
+            borderRadius: 4
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        layout: { padding: { top: 25 } },
+        plugins: {
+          legend: { labels: { color: "#94a3b8" } },
+          datalabels: {
+            display: true,
+            font: { weight: "bold", size: 9 },
+            align: "top",
+            offset: 2,
+            color: ctx => ctx.datasetIndex === 0 ? "#fbbf24" : "#d8b4fe",
+            formatter: v => v > 0 ? v : ""
+          },
+          tooltip: {
+            callbacks: {
+              afterBody: (items) => {
+                const idx = items[0].dataIndex;
+                const m = yoyByMonth[idx];
+                if (m && m.growth && m.growth.activations_pct !== null) {
+                  const s = m.growth.activations_pct > 0 ? "+" : "";
+                  return `YoY Growth: ${s}${m.growth.activations_pct}%`;
+                }
+                return "";
+              }
             }
           }
-        }
-      },
-      scales: {
-        y: {
-          grid: { color: "rgba(255,255,255,0.05)" },
-          ticks: { color: "#94a3b8" }
         },
-        x: {
-          grid: { display: false },
-          ticks: { color: "#94a3b8", maxRotation: 45, minRotation: 20 }
+        scales: {
+          y: {
+            grid: { color: "rgba(255,255,255,0.05)" },
+            ticks: { color: "#94a3b8" }
+          },
+          x: {
+            grid: { display: false },
+            ticks: { color: "#94a3b8" }
+          }
         }
       }
-    }
-  });
+    });
+  } else {
+    const labels = trend.map(t => t.label);
+    const totalActs = trend.map(t => t.activations_total);
+    const newActs = trend.map(t => t.activations_new);
+    const migrations = trend.map(t => t.activations_migrations);
+    const pyTotalActs = trend.map(t => t.py_activations || null);
+
+    charts.monthlyActivations = new Chart(ctx, {
+      type: "bar",
+      data: {
+        labels: labels,
+        datasets: [
+          {
+            label: "New Activations",
+            data: newActs,
+            backgroundColor: "#a855f7",
+            stack: "actStack",
+            borderRadius: 4,
+            order: 3
+          },
+          {
+            label: "Migrations",
+            data: migrations,
+            backgroundColor: "#06b6d4",
+            stack: "actStack",
+            borderRadius: 4,
+            order: 3
+          },
+          {
+            label: "Total Activations (Act + Mig)",
+            data: totalActs,
+            type: "line",
+            borderColor: "#ec4899",
+            borderWidth: 2.5,
+            backgroundColor: "transparent",
+            pointBackgroundColor: "#ec4899",
+            pointRadius: 4,
+            tension: 0.3,
+            order: 2
+          },
+          {
+            label: "Prior Year Total (YoY Baseline)",
+            data: pyTotalActs,
+            type: "line",
+            borderColor: "#f59e0b",
+            borderWidth: 2,
+            borderDash: [5, 4],
+            backgroundColor: "transparent",
+            pointBackgroundColor: "#f59e0b",
+            pointRadius: 5,
+            order: 1
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        layout: { padding: { top: 25 } },
+        plugins: {
+          legend: { labels: { color: "#94a3b8" } },
+          datalabels: {
+            display: true,
+            color: ctx => ctx.datasetIndex === 2 ? "#ffffff" : "transparent",
+            align: "top",
+            offset: 4,
+            font: { weight: "bold", size: 10 },
+            formatter: v => v > 0 ? v : ""
+          },
+          tooltip: {
+            callbacks: {
+              afterLabel: (ctx) => {
+                const item = trend[ctx.dataIndex];
+                if (item && item.yoy_growth_activations_pct !== null && ctx.datasetIndex === 2) {
+                  const s = item.yoy_growth_activations_pct > 0 ? "+" : "";
+                  return `YoY Growth vs ${item.py_label}: ${s}${item.yoy_growth_activations_pct}%`;
+                }
+                return "";
+              }
+            }
+          }
+        },
+        scales: {
+          y: {
+            grid: { color: "rgba(255,255,255,0.05)" },
+            ticks: { color: "#94a3b8" }
+          },
+          x: {
+            grid: { display: false },
+            ticks: { color: "#94a3b8", maxRotation: 45, minRotation: 20 }
+          }
+        }
+      }
+    });
+  }
 }
 
-// Monthly CPO Historical Trend Chart (Units & Revenue Dual-Axis)
-function renderMonthlyCPOChart(trend) {
+// Monthly CPO Historical Trend Chart (Units & Revenue with YoY)
+function renderMonthlyCPOChart(trend, yoyByMonth, mode) {
   const ctx = document.getElementById("chart-monthly-cpo-trend");
   if (!ctx) return;
   if (charts.monthlyCPO) charts.monthlyCPO.destroy();
 
-  const labels = trend.map(t => t.label);
-  const units = trend.map(t => t.cpo_units_actual);
-  const revenues = trend.map(t => t.cpo_revenue_actual);
+  if (mode === "yoy") {
+    const labels = yoyByMonth.map(m => m.month_name);
+    const data2025 = yoyByMonth.map(m => m.p2025 ? m.p2025.cpo_units : null);
+    const data2026 = yoyByMonth.map(m => m.p2026 ? m.p2026.cpo_units : null);
 
-  charts.monthlyCPO = new Chart(ctx, {
-    type: "bar",
-    data: {
-      labels: labels,
-      datasets: [
-        {
-          label: "CPO Units Sold",
-          data: units,
-          backgroundColor: "#10b981",
-          borderRadius: 6,
-          yAxisID: "y"
-        },
-        {
-          label: "CPO Revenue ($)",
-          data: revenues,
-          type: "line",
-          borderColor: "#06b6d4",
-          backgroundColor: "rgba(6, 182, 212, 0.1)",
-          fill: false,
-          tension: 0.3,
-          borderWidth: 2.5,
-          pointBackgroundColor: "#06b6d4",
-          pointRadius: 4,
-          yAxisID: "y1"
-        }
-      ]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      layout: { padding: { top: 25 } },
-      plugins: {
-        legend: { labels: { color: "#94a3b8" } },
-        datalabels: {
-          display: true,
-          font: { weight: "bold", size: 9 },
-          align: "top",
-          offset: 3,
-          color: ctx => ctx.datasetIndex === 0 ? "#6ee7b7" : "#67e8f9",
-          formatter: (v, ctx) => ctx.datasetIndex === 0 ? (v > 0 ? v : "") : (v > 0 ? formatCompactCurrency(v) : "")
-        }
+    charts.monthlyCPO = new Chart(ctx, {
+      type: "bar",
+      data: {
+        labels: labels,
+        datasets: [
+          {
+            label: "2025 CPO Units (Prior Year)",
+            data: data2025,
+            backgroundColor: "rgba(245, 158, 11, 0.55)",
+            borderColor: "#f59e0b",
+            borderWidth: 1.5,
+            borderRadius: 4
+          },
+          {
+            label: "2026 CPO Units (Current Year)",
+            data: data2026,
+            backgroundColor: "#10b981",
+            borderColor: "#34d399",
+            borderWidth: 1.5,
+            borderRadius: 4
+          }
+        ]
       },
-      scales: {
-        y: {
-          type: "linear",
-          position: "left",
-          grid: { color: "rgba(255,255,255,0.05)" },
-          ticks: { color: "#10b981" }
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        layout: { padding: { top: 25 } },
+        plugins: {
+          legend: { labels: { color: "#94a3b8" } },
+          datalabels: {
+            display: true,
+            font: { weight: "bold", size: 9 },
+            align: "top",
+            offset: 2,
+            color: ctx => ctx.datasetIndex === 0 ? "#fbbf24" : "#6ee7b7",
+            formatter: v => v > 0 ? v : ""
+          },
+          tooltip: {
+            callbacks: {
+              afterBody: (items) => {
+                const idx = items[0].dataIndex;
+                const m = yoyByMonth[idx];
+                if (m && m.growth && m.growth.cpo_pct !== null) {
+                  const s = m.growth.cpo_pct > 0 ? "+" : "";
+                  return `YoY Growth: ${s}${m.growth.cpo_pct}%`;
+                }
+                return "";
+              }
+            }
+          }
         },
-        y1: {
-          type: "linear",
-          position: "right",
-          grid: { display: false },
-          ticks: { color: "#06b6d4", callback: v => "$" + (v / 1000) + "k" }
-        },
-        x: {
-          grid: { display: false },
-          ticks: { color: "#94a3b8", maxRotation: 45, minRotation: 20 }
+        scales: {
+          y: {
+            grid: { color: "rgba(255,255,255,0.05)" },
+            ticks: { color: "#10b981" }
+          },
+          x: {
+            grid: { display: false },
+            ticks: { color: "#94a3b8" }
+          }
         }
       }
-    }
-  });
+    });
+  } else {
+    const labels = trend.map(t => t.label);
+    const units = trend.map(t => t.cpo_units_actual);
+    const revenues = trend.map(t => t.cpo_revenue_actual);
+    const pyUnits = trend.map(t => t.py_cpo_units || null);
+
+    charts.monthlyCPO = new Chart(ctx, {
+      type: "bar",
+      data: {
+        labels: labels,
+        datasets: [
+          {
+            label: "CPO Units Sold",
+            data: units,
+            backgroundColor: "#10b981",
+            borderRadius: 6,
+            yAxisID: "y",
+            order: 2
+          },
+          {
+            label: "Prior Year CPO Units (YoY)",
+            data: pyUnits,
+            type: "line",
+            borderColor: "#f59e0b",
+            borderWidth: 2,
+            borderDash: [5, 4],
+            backgroundColor: "transparent",
+            pointBackgroundColor: "#f59e0b",
+            pointRadius: 5,
+            yAxisID: "y",
+            order: 1
+          },
+          {
+            label: "CPO Revenue ($)",
+            data: revenues,
+            type: "line",
+            borderColor: "#06b6d4",
+            backgroundColor: "transparent",
+            borderWidth: 2,
+            pointBackgroundColor: "#06b6d4",
+            pointRadius: 4,
+            tension: 0.3,
+            yAxisID: "y1",
+            order: 3
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        layout: { padding: { top: 25 } },
+        plugins: {
+          legend: { labels: { color: "#94a3b8" } },
+          datalabels: {
+            display: true,
+            font: { weight: "bold", size: 9 },
+            align: "top",
+            offset: 3,
+            color: ctx => ctx.datasetIndex === 0 ? "#6ee7b7" : (ctx.datasetIndex === 2 ? "#67e8f9" : "transparent"),
+            formatter: (v, ctx) => ctx.datasetIndex === 0 ? (v > 0 ? v : "") : (ctx.datasetIndex === 2 && v > 0 ? formatCompactCurrency(v) : "")
+          },
+          tooltip: {
+            callbacks: {
+              afterLabel: (ctx) => {
+                const item = trend[ctx.dataIndex];
+                if (item && item.yoy_growth_cpo_pct !== null && ctx.datasetIndex === 0) {
+                  const s = item.yoy_growth_cpo_pct > 0 ? "+" : "";
+                  return `YoY Growth vs ${item.py_label}: ${s}${item.yoy_growth_cpo_pct}%`;
+                }
+                return "";
+              }
+            }
+          }
+        },
+        scales: {
+          y: {
+            type: "linear",
+            position: "left",
+            grid: { color: "rgba(255,255,255,0.05)" },
+            ticks: { color: "#10b981" }
+          },
+          y1: {
+            type: "linear",
+            position: "right",
+            grid: { display: false },
+            ticks: { color: "#06b6d4", callback: v => "$" + (v / 1000) + "k" }
+          },
+          x: {
+            grid: { display: false },
+            ticks: { color: "#94a3b8", maxRotation: 45, minRotation: 20 }
+          }
+        }
+      }
+    });
+  }
 }
 
-// Monthly Repairs Historical Trend Chart (OOW vs Insurance & Revenue)
-function renderMonthlyRepairsChart(trend) {
+// Monthly Repairs Historical Trend Chart (OOW vs Insurance & Revenue with YoY)
+function renderMonthlyRepairsChart(trend, yoyByMonth, mode) {
   const ctx = document.getElementById("chart-monthly-repairs-trend");
   if (!ctx) return;
   if (charts.monthlyRepairs) charts.monthlyRepairs.destroy();
 
-  const labels = trend.map(t => t.label);
-  const oow = trend.map(t => t.repairs_oow_volume);
-  const ins = trend.map(t => t.repairs_insurance_volume);
-  const revenues = trend.map(t => t.repairs_total_revenue);
+  if (mode === "yoy") {
+    const labels = yoyByMonth.map(m => m.month_name);
+    const data2025 = yoyByMonth.map(m => m.p2025 ? m.p2025.repairs_volume : null);
+    const data2026 = yoyByMonth.map(m => m.p2026 ? m.p2026.repairs_volume : null);
 
-  charts.monthlyRepairs = new Chart(ctx, {
-    type: "bar",
-    data: {
-      labels: labels,
-      datasets: [
-        {
-          label: "Out of Warranty (OOW)",
-          data: oow,
-          backgroundColor: "#f59e0b",
-          stack: "repStack",
-          borderRadius: 4,
-          yAxisID: "y"
-        },
-        {
-          label: "Insurance Repairs",
-          data: ins,
-          backgroundColor: "#06b6d4",
-          stack: "repStack",
-          borderRadius: 4,
-          yAxisID: "y"
-        },
-        {
-          label: "Total Repair Revenue ($)",
-          data: revenues,
-          type: "line",
-          borderColor: "#3b82f6",
-          borderWidth: 2.5,
-          backgroundColor: "transparent",
-          pointBackgroundColor: "#3b82f6",
-          pointRadius: 4,
-          tension: 0.3,
-          yAxisID: "y1"
-        }
-      ]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      layout: { padding: { top: 25 } },
-      plugins: {
-        legend: { labels: { color: "#94a3b8" } },
-        datalabels: {
-          display: true,
-          color: ctx => ctx.datasetIndex === 2 ? "#93c5fd" : "transparent",
-          align: "top",
-          offset: 4,
-          font: { weight: "bold", size: 9 },
-          formatter: (v, ctx) => ctx.datasetIndex === 2 && v > 0 ? formatCompactCurrency(v) : ""
-        }
+    charts.monthlyRepairs = new Chart(ctx, {
+      type: "bar",
+      data: {
+        labels: labels,
+        datasets: [
+          {
+            label: "2025 Total Repairs (Prior Year)",
+            data: data2025,
+            backgroundColor: "rgba(244, 63, 94, 0.55)",
+            borderColor: "#f43f5e",
+            borderWidth: 1.5,
+            borderRadius: 4
+          },
+          {
+            label: "2026 Total Repairs (Current Year)",
+            data: data2026,
+            backgroundColor: "#06b6d4",
+            borderColor: "#22d3ee",
+            borderWidth: 1.5,
+            borderRadius: 4
+          }
+        ]
       },
-      scales: {
-        y: {
-          type: "linear",
-          position: "left",
-          grid: { color: "rgba(255,255,255,0.05)" },
-          ticks: { color: "#f59e0b" }
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        layout: { padding: { top: 25 } },
+        plugins: {
+          legend: { labels: { color: "#94a3b8" } },
+          datalabels: {
+            display: true,
+            font: { weight: "bold", size: 9 },
+            align: "top",
+            offset: 2,
+            color: ctx => ctx.datasetIndex === 0 ? "#fda4af" : "#67e8f9",
+            formatter: v => v > 0 ? v : ""
+          },
+          tooltip: {
+            callbacks: {
+              afterBody: (items) => {
+                const idx = items[0].dataIndex;
+                const m = yoyByMonth[idx];
+                if (m && m.growth && m.growth.repairs_pct !== null) {
+                  const s = m.growth.repairs_pct > 0 ? "+" : "";
+                  return `YoY Growth: ${s}${m.growth.repairs_pct}%`;
+                }
+                return "";
+              }
+            }
+          }
         },
-        y1: {
-          type: "linear",
-          position: "right",
-          grid: { display: false },
-          ticks: { color: "#3b82f6", callback: v => "$" + (v / 1000) + "k" }
-        },
-        x: {
-          grid: { display: false },
-          ticks: { color: "#94a3b8", maxRotation: 45, minRotation: 20 }
+        scales: {
+          y: {
+            grid: { color: "rgba(255,255,255,0.05)" },
+            ticks: { color: "#06b6d4" }
+          },
+          x: {
+            grid: { display: false },
+            ticks: { color: "#94a3b8" }
+          }
         }
       }
-    }
-  });
+    });
+  } else {
+    const labels = trend.map(t => t.label);
+    const oow = trend.map(t => t.repairs_oow_volume);
+    const ins = trend.map(t => t.repairs_insurance_volume);
+    const revenues = trend.map(t => t.repairs_total_revenue);
+    const pyTotalRep = trend.map(t => t.py_repairs_volume || null);
+
+    charts.monthlyRepairs = new Chart(ctx, {
+      type: "bar",
+      data: {
+        labels: labels,
+        datasets: [
+          {
+            label: "Out of Warranty (OOW)",
+            data: oow,
+            backgroundColor: "#f59e0b",
+            stack: "repStack",
+            borderRadius: 4,
+            yAxisID: "y",
+            order: 3
+          },
+          {
+            label: "Insurance Repairs",
+            data: ins,
+            backgroundColor: "#06b6d4",
+            stack: "repStack",
+            borderRadius: 4,
+            yAxisID: "y",
+            order: 3
+          },
+          {
+            label: "Prior Year Total Repairs (YoY)",
+            data: pyTotalRep,
+            type: "line",
+            borderColor: "#f43f5e",
+            borderWidth: 2,
+            borderDash: [5, 4],
+            backgroundColor: "transparent",
+            pointBackgroundColor: "#f43f5e",
+            pointRadius: 5,
+            yAxisID: "y",
+            order: 1
+          },
+          {
+            label: "Total Repair Revenue ($)",
+            data: revenues,
+            type: "line",
+            borderColor: "#3b82f6",
+            borderWidth: 2.5,
+            backgroundColor: "transparent",
+            pointBackgroundColor: "#3b82f6",
+            pointRadius: 4,
+            tension: 0.3,
+            yAxisID: "y1",
+            order: 2
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        layout: { padding: { top: 25 } },
+        plugins: {
+          legend: { labels: { color: "#94a3b8" } },
+          datalabels: {
+            display: true,
+            color: ctx => ctx.datasetIndex === 3 ? "#93c5fd" : "transparent",
+            align: "top",
+            offset: 4,
+            font: { weight: "bold", size: 9 },
+            formatter: (v, ctx) => ctx.datasetIndex === 3 && v > 0 ? formatCompactCurrency(v) : ""
+          },
+          tooltip: {
+            callbacks: {
+              afterLabel: (ctx) => {
+                const item = trend[ctx.dataIndex];
+                if (item && item.yoy_growth_repairs_pct !== null && (ctx.datasetIndex === 0 || ctx.datasetIndex === 1)) {
+                  const s = item.yoy_growth_repairs_pct > 0 ? "+" : "";
+                  return `YoY Growth vs ${item.py_label}: ${s}${item.yoy_growth_repairs_pct}%`;
+                }
+                return "";
+              }
+            }
+          }
+        },
+        scales: {
+          y: {
+            type: "linear",
+            position: "left",
+            grid: { color: "rgba(255,255,255,0.05)" },
+            ticks: { color: "#f59e0b" }
+          },
+          y1: {
+            type: "linear",
+            position: "right",
+            grid: { display: false },
+            ticks: { color: "#3b82f6", callback: v => "$" + (v / 1000) + "k" }
+          },
+          x: {
+            grid: { display: false },
+            ticks: { color: "#94a3b8", maxRotation: 45, minRotation: 20 }
+          }
+        }
+      }
+    });
+  }
 }
 
-// Monthly Foot Traffic & Conversion Rate Historical Trend Chart
-function renderMonthlyTrafficChart(trend) {
+// Monthly Foot Traffic & Conversion Rate Historical Trend Chart (with YoY)
+function renderMonthlyTrafficChart(trend, yoyByMonth, mode) {
   const ctx = document.getElementById("chart-monthly-traffic-trend");
   if (!ctx) return;
   if (charts.monthlyTraffic) charts.monthlyTraffic.destroy();
 
-  const labels = trend.map(t => t.label);
-  const traffic = trend.map(t => t.foot_traffic_total);
-  const convRates = trend.map(t => t.conversion_rate_pct);
+  if (mode === "yoy") {
+    const labels = yoyByMonth.map(m => m.month_name);
+    const data2025 = yoyByMonth.map(m => m.p2025 ? m.p2025.traffic : null);
+    const data2026 = yoyByMonth.map(m => m.p2026 ? m.p2026.traffic : null);
 
-  charts.monthlyTraffic = new Chart(ctx, {
-    type: "bar",
-    data: {
-      labels: labels,
-      datasets: [
-        {
-          label: "Door Traffic",
-          data: traffic,
-          backgroundColor: "rgba(244, 63, 94, 0.65)",
-          borderColor: "#f43f5e",
-          borderWidth: 1,
-          borderRadius: 6,
-          yAxisID: "y"
-        },
-        {
-          label: "Conversion Rate (%)",
-          data: convRates,
-          type: "line",
-          borderColor: "#10b981",
-          backgroundColor: "transparent",
-          borderWidth: 2.5,
-          pointBackgroundColor: "#10b981",
-          pointRadius: 4,
-          tension: 0.3,
-          yAxisID: "y1"
-        }
-      ]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      layout: { padding: { top: 25 } },
-      plugins: {
-        legend: { labels: { color: "#94a3b8" } },
-        datalabels: {
-          display: true,
-          font: { weight: "bold", size: 9 },
-          align: "top",
-          offset: 3,
-          color: ctx => ctx.datasetIndex === 0 ? "#fda4af" : "#6ee7b7",
-          formatter: (v, ctx) => ctx.datasetIndex === 0 ? (v > 0 ? formatNumber(v) : "") : (v > 0 ? v + "%" : "")
-        }
+    charts.monthlyTraffic = new Chart(ctx, {
+      type: "bar",
+      data: {
+        labels: labels,
+        datasets: [
+          {
+            label: "2025 Door Traffic (Prior Year)",
+            data: data2025,
+            backgroundColor: "rgba(245, 158, 11, 0.55)",
+            borderColor: "#f59e0b",
+            borderWidth: 1.5,
+            borderRadius: 4
+          },
+          {
+            label: "2026 Door Traffic (Current Year)",
+            data: data2026,
+            backgroundColor: "rgba(244, 63, 94, 0.75)",
+            borderColor: "#f43f5e",
+            borderWidth: 1.5,
+            borderRadius: 4
+          }
+        ]
       },
-      scales: {
-        y: {
-          type: "linear",
-          position: "left",
-          grid: { color: "rgba(255,255,255,0.05)" },
-          ticks: { color: "#f43f5e", callback: v => (v >= 1000 ? (v / 1000).toFixed(0) + "k" : v) }
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        layout: { padding: { top: 25 } },
+        plugins: {
+          legend: { labels: { color: "#94a3b8" } },
+          datalabels: {
+            display: true,
+            font: { weight: "bold", size: 8 },
+            align: "top",
+            offset: 2,
+            color: ctx => ctx.datasetIndex === 0 ? "#fbbf24" : "#fda4af",
+            formatter: v => v > 0 ? (v >= 1000 ? (v / 1000).toFixed(0) + "k" : v) : ""
+          },
+          tooltip: {
+            callbacks: {
+              afterBody: (items) => {
+                const idx = items[0].dataIndex;
+                const m = yoyByMonth[idx];
+                if (m && m.growth && m.growth.traffic_pct !== null) {
+                  const s = m.growth.traffic_pct > 0 ? "+" : "";
+                  return `YoY Growth: ${s}${m.growth.traffic_pct}%`;
+                }
+                return "";
+              }
+            }
+          }
         },
-        y1: {
-          type: "linear",
-          position: "right",
-          grid: { display: false },
-          ticks: { color: "#10b981", callback: v => v + "%" }
-        },
-        x: {
-          grid: { display: false },
-          ticks: { color: "#94a3b8", maxRotation: 45, minRotation: 20 }
+        scales: {
+          y: {
+            grid: { color: "rgba(255,255,255,0.05)" },
+            ticks: { color: "#f43f5e", callback: v => (v >= 1000 ? (v / 1000).toFixed(0) + "k" : v) }
+          },
+          x: {
+            grid: { display: false },
+            ticks: { color: "#94a3b8" }
+          }
         }
       }
-    }
-  });
+    });
+  } else {
+    const labels = trend.map(t => t.label);
+    const traffic = trend.map(t => t.foot_traffic_total);
+    const convRates = trend.map(t => t.conversion_rate_pct);
+    const pyTraffic = trend.map(t => t.py_traffic || null);
+
+    charts.monthlyTraffic = new Chart(ctx, {
+      type: "bar",
+      data: {
+        labels: labels,
+        datasets: [
+          {
+            label: "Door Traffic",
+            data: traffic,
+            backgroundColor: "rgba(244, 63, 94, 0.65)",
+            borderColor: "#f43f5e",
+            borderWidth: 1,
+            borderRadius: 6,
+            yAxisID: "y",
+            order: 2
+          },
+          {
+            label: "Prior Year Door Traffic (YoY)",
+            data: pyTraffic,
+            type: "line",
+            borderColor: "#f59e0b",
+            borderWidth: 2,
+            borderDash: [5, 4],
+            backgroundColor: "transparent",
+            pointBackgroundColor: "#f59e0b",
+            pointRadius: 5,
+            yAxisID: "y",
+            order: 1
+          },
+          {
+            label: "Conversion Rate (%)",
+            data: convRates,
+            type: "line",
+            borderColor: "#10b981",
+            backgroundColor: "transparent",
+            borderWidth: 2.5,
+            pointBackgroundColor: "#10b981",
+            pointRadius: 4,
+            tension: 0.3,
+            yAxisID: "y1",
+            order: 3
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        layout: { padding: { top: 25 } },
+        plugins: {
+          legend: { labels: { color: "#94a3b8" } },
+          datalabels: {
+            display: true,
+            font: { weight: "bold", size: 9 },
+            align: "top",
+            offset: 3,
+            color: ctx => ctx.datasetIndex === 0 ? "#fda4af" : (ctx.datasetIndex === 2 ? "#6ee7b7" : "transparent"),
+            formatter: (v, ctx) => ctx.datasetIndex === 0 ? (v > 0 ? formatNumber(v) : "") : (ctx.datasetIndex === 2 && v > 0 ? v + "%" : "")
+          },
+          tooltip: {
+            callbacks: {
+              afterLabel: (ctx) => {
+                const item = trend[ctx.dataIndex];
+                if (item && item.yoy_growth_traffic_pct !== null && ctx.datasetIndex === 0) {
+                  const s = item.yoy_growth_traffic_pct > 0 ? "+" : "";
+                  return `YoY Growth vs ${item.py_label}: ${s}${item.yoy_growth_traffic_pct}%`;
+                }
+                return "";
+              }
+            }
+          }
+        },
+        scales: {
+          y: {
+            type: "linear",
+            position: "left",
+            grid: { color: "rgba(255,255,255,0.05)" },
+            ticks: { color: "#f43f5e", callback: v => (v >= 1000 ? (v / 1000).toFixed(0) + "k" : v) }
+          },
+          y1: {
+            type: "linear",
+            position: "right",
+            grid: { display: false },
+            ticks: { color: "#10b981", callback: v => v + "%" }
+          },
+          x: {
+            grid: { display: false },
+            ticks: { color: "#94a3b8", maxRotation: 45, minRotation: 20 }
+          }
+        }
+      }
+    });
+  }
 }
+
 
 // Parameter Filter Modal & Visibility Controls
 function openParamModal() {

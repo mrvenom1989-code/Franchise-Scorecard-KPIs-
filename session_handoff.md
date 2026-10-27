@@ -133,7 +133,12 @@ Three pre-configured test accounts are active in Supabase Auth and ready for val
     *   `Hardware & CPO` $\rightarrow$ `CPO`
     *   `Technical & Repairs` $\rightarrow$ `Repairs`
 *   **Forensic Data Ingestion & Name-First Resolution Architecture**: Resolved corporate's human data-entry error in `Sept 26` (where Column A store numbers were shifted down 1 row across 17 stores, causing Lethbridge to show Landsdowne's $75,035 revenue). Built `normalize_store_name()` and a Name-First Location Resolution engine that automatically detects and reconciles store code column misalignments in Excel files, restoring Lethbridge to its true $171,113 revenue and $63,616 OOW repair revenue.
-*   **Asset Cache Busting**: Configured `?v=1.3` query versions on static CSS and JS assets in base templates.
+*   **Comprehensive Year-on-Year (YoY) Visualizations & Interactive View Switcher**:
+    *   **Executive Pulse Growth Velocity Matrix**: Added a dedicated 6-card comparative performance section to the Executive Pulse tab showing real-time MoM (vs `Sept 26`) and YoY (vs `Oct 2025`) growth deltas for Gross Revenue (+117.9% YoY), Total Activations (+319.1% YoY), CPO Units (+154.5% YoY), Total Repairs (+88.4% YoY), Foot Traffic (+209.0% YoY), and Conversion Rate.
+    *   **Prior Year (YoY Baseline) Dataset**: Plotted an amber dashed baseline directly on all chronological monthly charts (Revenue, Activations, CPO, Repairs, Traffic), connecting matching historical periods from 2025.
+    *   **Interactive View Switcher**: Added `[14-Mo Trend]` vs `[YoY (2025 vs 2026)]` toggle buttons on every historical chart. In YoY mode, the chart plots 2025 vs 2026 side-by-side across calendar months (Jan–Dec) with hover tooltips displaying seasonal growth percentages.
+    *   **Executive Monthly Revenue Trend Chart**: Added an interactive 2025 vs 2026 historical revenue chart to the Executive Pulse dashboard.
+*   **Asset Cache Busting**: Configured `?v=1.4` query versions on static CSS and JS assets in base and dashboard templates.
 
 ---
 

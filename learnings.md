@@ -252,6 +252,24 @@ This document records architectural insights, data anomalies, API quirks, and te
     *   `Technical & Repairs` $\rightarrow$ `Repairs`
     This reduces mental overhead, saves horizontal tab bar real estate on mobile devices and POS tablets, and keeps visual hierarchy clean and action-oriented.
 
+---
+
+## 11. Year-on-Year (YoY) Visual Analytics & Dual-Mode Horizon Architecture
+
+### The Spatial Disconnect in Multi-Year Historical Timelines
+*   **The Problem**: Displaying a 14-month continuous timeline spreads seasonal pairs (e.g. `Sept 2025` vs `Sept 26`, `Oct 2025` vs `Oct 26 MTD`) far apart on opposite ends of the X-axis. Users cannot visually assess growth velocity or seasonal patterns without manually tracking data points across the canvas.
+*   **The Solution**:
+    1.  **Prior Year Baseline Dataset (Timeline View)**:
+        *   In `routes/api.py`, every period in `/api/monthly-trend` identifies its matching prior-year month (`i_year - 1`, same `i_month`) and attaches `py_revenue`, `py_activations`, `py_cpo_units`, `py_repairs_volume`, and `py_traffic`.
+        *   Chart.js renders an amber dashed baseline overlaying the continuous 14-month trend, making YoY comparisons visible directly in chronological context.
+    2.  **Calendar Month Overlay Mode (12-Month Aligned View)**:
+        *   An interactive button group (`[14-Mo Trend]` vs `[YoY (2025 vs 2026)]`) switches the X-axis to 12 calendar months (Jan–Dec).
+        *   Plots 2025 (Prior Year) vs 2026 (Current Year) side-by-side as dual bar/line datasets, with tooltip callbacks surfacing exact YoY percentage growth.
+    3.  **Executive Growth Velocity Matrix**:
+        *   Placed directly below the primary KPI cards on the Executive Pulse tab.
+        *   Presents a 6-pillar comparison matrix (Revenue, Activations, CPO, Repairs, Traffic, Conversion) displaying Current, MoM, and YoY numbers simultaneously, ensuring immediate visibility upon login.
+
+
 
 
 
