@@ -287,3 +287,19 @@ Server runs at `http://127.0.0.1:5001`.
    * Store Performance Leaderboard re-ranks the franchise network based on cumulative performance over the chosen timeframe.
    * `/api/export-csv` generates multi-month cumulative CSV downloads with proper range header tags.
 
+---
+
+## 11. January 2026 Foot Traffic Recovery & Retrospective Data Audit (November 7, 2026)
+
+1. **Recovery of January 2026 Foot Traffic & Conversion Rates**:
+   * **Root Cause**: Corporate completely omitted the Traffic section from the `Jan 26` tab due to a Week 2 sensor outage.
+   * **Discovery & Fix**: Identified that the finalized January 2026 foot traffic was recorded store-by-store in sheet `Feb 26` Column 7 (`Total Traffic MOM`).
+   * **Execution**: Executed `scripts/backfill_jan_traffic.py`, backfilling **30,486 visits** across 27 franchise stores and recomputing `conversion_rate_pct` and `foot_traffic_daily_avg`.
+
+2. **Data Spot-Check Audit vs Master Workbook**:
+   * Executed `scripts/spot_check_workbook_data.py` randomly sampling across multiple periods (`Oct 26 MTD`, `Aug 26`, `May 26`, `Mar 26`, `Dec 2025`, `Sept 2025`).
+   * Gross Revenue matched to the exact penny across 100% of sampled stores.
+   * Total Sales Volume and CPO Units matched 100%.
+   * Foot Traffic matched 100% against corporate MTD actuals.
+   * Total Activations strictly followed the codified `Total = New + Migrations` rule, correctly reconciling corporate formula discrepancies.
+

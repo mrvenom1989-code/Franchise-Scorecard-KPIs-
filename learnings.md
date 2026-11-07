@@ -319,6 +319,18 @@ This document records architectural insights, data anomalies, API quirks, and te
     *   When switching to `Custom Range`, single-month delta badges ("vs Prior Month") are hidden and replaced by a prominent Range Banner: *"Showing cumulative performance across [X] months ([Start Period] → [End Period])"*.
     *   Included 5 instantaneous preset pills (`YTD 2026`, `Full 2025`, `L6M`, `L3M`, `All (22M)`) that configure the dual dropdowns and trigger real-time asynchronous data fetching with zero page reloads.
 
+---
+
+## 15. Cross-Period Omission Recovery & PostgreSQL Integer Coercion
+
+### The "Omitted MTD / Embedded MOM" Pattern
+*   **The Problem**: Sheet `Jan 26` omitted the entire foot traffic section because of an IoT door sensor network outage in Week 2. Standard parsers recorded 0 visits and 0.0% conversion rates for all stores.
+*   **The Solution**: When corporate finalized the subsequent month (`Feb 26`), they captured the prior month's reconciled foot traffic in `Total Traffic MOM` (Column 7). By cross-referencing adjacent monthly sheets, missing metrics can be recovered deterministically without guesswork.
+
+### PostgreSQL Explicit Integer Validation
+*   **The Gotcha**: Passing float strings (e.g. `"787.0"`) to Postgres `INTEGER` columns raises SQL error `22P02: invalid input syntax for type integer: "787.0"`.
+*   **The Rule**: Always coerce numeric values destined for PostgreSQL integer columns using `int(round(float(val)))`.
+
 
 
 
