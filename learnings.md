@@ -290,6 +290,21 @@ This document records architectural insights, data anomalies, API quirks, and te
         *   Upgraded card subtitles to `#cbd5e1` (weight 500).
         *   Upgraded legend labels to `#e2e8f0` (weight 600).
 
+---
+
+## 13. Transition from Sheet-Centric Files to a Unified Month-Wise Historical Database
+
+### The "Missing Early 2025 Data" Myth
+*   **The Problem**: Prior session handoffs stated that corporate began tracking in September 2025 and that Jan–Aug 2025 did not exist because there were no standalone sheets named `Jan 2025` or `Feb 2025`. Consequently, YoY charts showed $0$ for 2025 for months 1 to 8.
+*   **The Root Cause**: `ingest_scorecard.py` only looked for sheets as isolated current-month documents, parsing only the current MTD columns and ignoring the `YoY` columns sitting in those same sheets.
+*   **The Discovery**: Every 2026 tab (`Jan 26` through `Aug 26`) contained over 30 store-by-store YoY columns capturing the exact 2025 historical data for that month (e.g. `YoY Total Gross Revenue`, `YoY Total Sales`, `YoY CPO Units`, `YoY OOW # Repairs`, `Total Traffic YoY`).
+*   **The Solution**:
+    1.  Created 8 new accounting periods in `scorecard_periods`: `Jan 2025` through `Aug 2025`.
+    2.  Built `scripts/ingest_yoy_historical.py` to extract store-level historical numbers from the 2026 sheets, mapping each row via canonical name resolution to prevent column shift errors.
+    3.  Upserted **260 store records** into `monthly_kpis`, expanding the database to **788 total monthly KPI records** across 23 accounting periods.
+    4.  Every month in 2025 now matches corporate's sheet summary totals to the exact penny, lighting up the orange prior-year baseline across all 12 calendar months in the YoY charts.
+
+
 
 
 

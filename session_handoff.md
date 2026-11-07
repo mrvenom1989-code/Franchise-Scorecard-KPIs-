@@ -222,23 +222,34 @@ Server runs at `http://127.0.0.1:5001`.
 | :--- | :--- | :--- |
 | **Git Remote** | Synced | `https://github.com/mrvenom1989-code/Franchise-Scorecard-KPIs-.git` (`main` @ `4d83eaf`) |
 | **Vercel Production** | Live | `https://franchise-scorecard-kp-is-drab.vercel.app/` (HTTP 200 OK, `v=1.5`) |
-| **Supabase PostgreSQL** | Active | `amjzomlovbuwjneqnumv.supabase.co` (85 locations, 528 monthly KPIs, 15 periods) |
+| **Supabase PostgreSQL** | Active | `amjzomlovbuwjneqnumv.supabase.co` (85 locations, 788 monthly KPIs, 23 periods) |
 | **Total Activations Rule** | Active | Enforced in ETL, database (110 rows synced), REST API, and frontend |
 | **Tab Nomenclature** | Active | `Activations`, `CPO`, `Repairs` deployed across templates and controllers |
 | **Chart Visibility & Labels** | Active | Glassmorphic pill badge data labels, bright `#e2e8f0` ticks, tri-tone palettes |
-| **YoY Timeline Architecture**| Active | Clean 14-Mo trend + side-by-side YoY (2025 vs 2026) mode with tracking badge |
+| **YoY Timeline Architecture**| Active | Clean 22-Mo continuous trend + 100% complete YoY (2025 vs 2026) across all 12 calendar months |
 
 ---
 
-## 9. Recent Enhancements: YoY Timeline & High-Legibility Visualization
+## 9. Recent Enhancements: Full 2025 Historical Ingestion & 12-Month YoY Baselines (November 7, 2026)
 
-1. **Clarification on Historical Data Availability**:
-   * Direct verification of corporate source workbook `Updated Franchise Scorecard - Oct MTD EOD - 10-25-26.xlsx` confirmed that corporate began franchise network tracking in **September 2025**. Months Jan–Aug 2025 were never recorded by corporate.
-   * Consequently, prior-year comparisons only exist for matching months Sept & Oct.
-   * Removed the disconnected 2-point floating yellow baseline from the continuous 14-month view to eliminate user confusion (which looked like broken or missing data for Jan–Aug 2026).
-   * Exact YoY growth is surfaced in hover tooltips (`YoY Growth vs Sept 2025: +411.3%`, `YoY Growth vs Oct 2025: +149.4%`) and top-right header badges.
-   * Dedicated side-by-side annual comparison is available via the `[YoY (2025 vs 2026)]` switcher button.
-   * Added an informational note badge under all charts explaining corporate historical tracking origins.
+1. **Recovery & Ingestion of Jan–Aug 2025 Historical Data**:
+   * Identified that corporate's master workbook `Updated Franchise Scorecard - Oct MTD EOD - 10-25-26.xlsx` contains over 30 store-by-store YoY columns embedded inside the 2026 monthly sheets (`Jan 26` through `Aug 26`), capturing exact 2025 historical data for each month.
+   * Created 8 new accounting periods in `scorecard_periods`: `Jan 2025` through `Aug 2025`.
+   * Developed and executed `scripts/ingest_yoy_historical.py`, mapping each store's metrics via canonical location name/number indexing and upserting **260 store records** into `monthly_kpis`.
+   * Verified network revenue totals against corporate sheet summary rows to the penny:
+     - `Jan 2025`: $862,260.00 (28 stores)
+     - `Feb 2025`: $796,150.00 (31 stores)
+     - `Mar 2025`: $1,086,025.54 (32 stores)
+     - `April 2025`: $1,016,790.05 (30 stores)
+     - `May 2025`: $1,286,310.00 (30 stores)
+     - `June 2025`: $1,403,200.52 (30 stores)
+     - `July 2025`: $1,696,662.74 (30 stores)
+     - `Aug 2025`: $3,314,799.00 (49 stores)
+   * The database now holds a complete, unbroken **22-month continuous historical timeline** from January 2025 to October 2026 (788 monthly KPI records).
+
+2. **100% Complete 12-Month Year-on-Year (YoY) Visualizations**:
+   * Because `routes/api.py` automatically pairs months by calendar month number (`m_idx = 1..12`), the **Monthly Revenue Trend & YoY Overlay** chart (and detail charts for Activations, CPO, Repairs, and Traffic) now displays full, non-zero orange 2025 baseline bars across **all 12 calendar months**.
+   * Updated dashboard info notes in `templates/dashboard.html` confirming full 12-month historical availability.
 
 2. **High-Visibility Badge Pill Data Labels**:
    * Overhauled all data labels into executive pill badges with solid dark backdrops (`rgba(15, 23, 42, 0.95)`), 1.5px colored borders matching each metric, 11px bold typography, and padding.
