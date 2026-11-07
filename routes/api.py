@@ -53,6 +53,8 @@ def verify_location_access(user, requested_location_id):
 def get_scorecard_data():
     user = session['user']
     period_id = request.args.get('period_id')
+    start_period_id = request.args.get('start_period_id')
+    end_period_id = request.args.get('end_period_id')
     loc_param = request.args.get('location_id', 'all')
 
     # Security verification
@@ -64,6 +66,7 @@ def get_scorecard_data():
     if target_loc_ids == []:
         return jsonify({
             "period_id": period_id,
+            "is_range": False,
             "count": 0,
             "summary": {
                 "gross_revenue_actual": 0.0,
@@ -106,16 +109,46 @@ def get_scorecard_data():
         })
 
     try:
-        # Default to latest period if none provided
-        if not period_id:
-            p_resp = supabase.table('scorecard_periods').select('id, label').order('end_date', desc=True).limit(1).execute()
-            if p_resp.data:
-                period_id = p_resp.data[0]['id']
+        is_range = bool(start_period_id and end_period_id and start_period_id != end_period_id)
+        selected_pids = []
+        range_label = None
+        matching_periods = []
+
+        if is_range:
+            p_resp = supabase.table('scorecard_periods').select('id, label, start_date, end_date').order('start_date').execute()
+            all_periods = p_resp.data or []
+            start_p = next((p for p in all_periods if p['id'] == start_period_id), None)
+            end_p = next((p for p in all_periods if p['id'] == end_period_id), None)
+
+            if start_p and end_p:
+                min_date = min(start_p['start_date'], end_p['start_date'])
+                max_date = max(start_p['end_date'], end_p['end_date'])
+                matching_periods = [
+                    p for p in all_periods 
+                    if min_date <= p['start_date'] and p['end_date'] <= max_date
+                    and not (p['label'] == 'Jan 26 MTD' and any(x['label'] == 'Jan 26' for x in all_periods if min_date <= x['start_date'] and x['end_date'] <= max_date))
+                ]
+                selected_pids = [p['id'] for p in matching_periods]
+                range_label = f"{matching_periods[0]['label']} – {matching_periods[-1]['label']}"
             else:
-                return jsonify({"error": "No periods found"}), 404
+                is_range = False
+
+        if not is_range:
+            if not period_id:
+                p_resp = supabase.table('scorecard_periods').select('id, label').order('end_date', desc=True).limit(1).execute()
+                if p_resp.data:
+                    period_id = p_resp.data[0]['id']
+                else:
+                    return jsonify({"error": "No periods found"}), 404
+            selected_pids = [period_id]
 
         # Query monthly_kpis
-        query = supabase.table('monthly_kpis').select('*, locations(id, store_number, name, short_name, region, store_type)').eq('period_id', period_id)
+        query = supabase.table('monthly_kpis').select('*, locations(id, store_number, name, short_name, region, store_type)')
+        if len(selected_pids) == 1:
+            query = query.eq('period_id', selected_pids[0])
+        else:
+            query = query.in_('period_id', selected_pids)
+
         if target_loc_ids is not None:
             query = query.in_('location_id', target_loc_ids)
 
@@ -124,118 +157,203 @@ def get_scorecard_data():
 
         if not rows:
             return jsonify({
-                "period_id": period_id,
+                "period_id": period_id or (selected_pids[0] if selected_pids else None),
+                "is_range": is_range,
+                "range_label": range_label,
+                "month_count": len(matching_periods) if is_range else 1,
                 "count": 0,
                 "summary": {},
                 "store_rows": [],
                 "benchmark": {}
             })
 
-        # Aggregation
+        # Multi-month store aggregation (groups by location_id so each store has 1 consolidated row)
+        store_agg = {}
+        for r in rows:
+            lid = r.get('location_id')
+            if not lid:
+                continue
+            loc = r.get('locations') or {}
+            act_new = int(r.get('activations_new') or 0)
+            act_mig = int(r.get('activations_migrations') or 0)
+            act_tot = act_new + act_mig
+
+            if lid not in store_agg:
+                store_agg[lid] = {
+                    "location_id": lid,
+                    "store_number": loc.get('store_number'),
+                    "name": loc.get('name'),
+                    "region": loc.get('region'),
+                    "store_type": loc.get('store_type'),
+                    "revenue": 0.0,
+                    "revenue_projected": 0.0,
+                    "sales_volume": 0,
+                    "activations": 0,
+                    "activations_new": 0,
+                    "activations_migrations": 0,
+                    "activations_renewals": 0,
+                    "activations_telus_post": 0,
+                    "activations_koodo_post": 0,
+                    "activations_koodo_pre": 0,
+                    "cpo_units": 0,
+                    "cpo_revenue": 0.0,
+                    "cpo_attach_count": 0,
+                    "trade_in_units": 0,
+                    "repairs_oow": 0,
+                    "repairs_oow_rev": 0.0,
+                    "repair_attach_count": 0,
+                    "repairs_insurance": 0,
+                    "repairs_ins_rev": 0.0,
+                    "accessories_volume": 0,
+                    "accessories_rev": 0.0,
+                    "protection_bundles": 0,
+                    "traffic": 0,
+                    "months_recorded": 0
+                }
+
+            sa = store_agg[lid]
+            sa["months_recorded"] += 1
+            sa["revenue"] += float(r.get('gross_revenue_actual') or 0)
+            sa["revenue_projected"] += float(r.get('gross_revenue_projected') or 0)
+            sa["sales_volume"] += int(r.get('sales_volume') or 0)
+            sa["activations"] += act_tot
+            sa["activations_new"] += act_new
+            sa["activations_migrations"] += act_mig
+            sa["activations_renewals"] += int(r.get('activations_renewals') or 0)
+            sa["activations_telus_post"] += int(r.get('activations_telus_post') or 0)
+            sa["activations_koodo_post"] += int(r.get('activations_koodo_post') or 0)
+            sa["activations_koodo_pre"] += int(r.get('activations_koodo_pre') or 0)
+            sa["cpo_units"] += int(r.get('cpo_units_actual') or 0)
+            sa["cpo_revenue"] += float(r.get('cpo_revenue_actual') or 0)
+            sa["cpo_attach_count"] += int(r.get('cpo_attach_activations_count') or 0)
+            sa["trade_in_units"] += int(r.get('trade_in_units') or 0)
+            sa["repairs_oow"] += int(r.get('repairs_oow_volume') or 0)
+            sa["repairs_oow_rev"] += float(r.get('repairs_oow_revenue') or 0)
+            sa["repair_attach_count"] += int(r.get('repair_attach_activations_count') or 0)
+            sa["repairs_insurance"] += int(r.get('repairs_insurance_volume') or 0)
+            sa["repairs_ins_rev"] += float(r.get('repairs_insurance_revenue') or 0)
+            sa["accessories_volume"] += int(r.get('accessories_volume') or 0)
+            sa["accessories_rev"] += float(r.get('accessories_revenue') or 0)
+            sa["protection_bundles"] += int(r.get('protection_bundles_volume') or 0)
+            sa["traffic"] += int(r.get('foot_traffic_total') or 0)
+
+        # Build final store rows with calculated rate metrics
+        store_rows = []
+        for sa in store_agg.values():
+            vol = sa["sales_volume"]
+            rev = sa["revenue"]
+            sa["asp"] = round(rev / vol, 2) if vol > 0 else 0.0
+            sa["cpo_attach_pct"] = round((sa["cpo_attach_count"] / sa["cpo_units"] * 100), 1) if sa["cpo_units"] > 0 else 0.0
+            tot_store_sales = sa["activations"] + sa["cpo_units"] + sa["repairs_oow"]
+            sa["conversion_rate_pct"] = round((tot_store_sales / sa["traffic"] * 100), 2) if sa["traffic"] > 0 else 0.0
+            sa["revenue"] = round(sa["revenue"], 2)
+            sa["revenue_projected"] = round(sa["revenue_projected"], 2)
+            sa["cpo_revenue"] = round(sa["cpo_revenue"], 2)
+            sa["repairs_oow_rev"] = round(sa["repairs_oow_rev"], 2)
+            sa["repairs_ins_rev"] = round(sa["repairs_ins_rev"], 2)
+            sa["accessories_rev"] = round(sa["accessories_rev"], 2)
+            store_rows.append(sa)
+
+        # Sort store rows by revenue descending
+        store_rows.sort(key=lambda x: x["revenue"], reverse=True)
+
+        store_count = len(store_rows)
+
+        # Calculate network summary
         summary = {
-            "gross_revenue_actual": 0.0,
-            "gross_revenue_projected": 0.0,
-            "sales_volume": 0,
-            "asp": 0.0,
-            "daily_avg_revenue": 0.0,
-            "activations_total": 0,
-            "activations_new": 0,
-            "activations_renewals": 0,
-            "activations_migrations": 0,
-            "activations_telus_post": 0,
-            "activations_koodo_post": 0,
-            "activations_koodo_pre": 0,
+            "gross_revenue_actual": round(sum(s["revenue"] for s in store_rows), 2),
+            "gross_revenue_projected": round(sum(s["revenue_projected"] for s in store_rows), 2),
+            "sales_volume": sum(s["sales_volume"] for s in store_rows),
+            "activations_total": sum(s["activations"] for s in store_rows),
+            "activations_new": sum(s["activations_new"] for s in store_rows),
+            "activations_renewals": sum(s["activations_renewals"] for s in store_rows),
+            "activations_migrations": sum(s["activations_migrations"] for s in store_rows),
+            "activations_telus_post": sum(s["activations_telus_post"] for s in store_rows),
+            "activations_koodo_post": sum(s["activations_koodo_post"] for s in store_rows),
+            "activations_koodo_pre": sum(s["activations_koodo_pre"] for s in store_rows),
             "koodo_finance": 0,
             "telus_finance": 0,
-            "cpo_units_actual": 0,
+            "cpo_units_actual": sum(s["cpo_units"] for s in store_rows),
             "cpo_units_projected": 0,
-            "cpo_revenue_actual": 0.0,
-            "cpo_attach_activations_count": 0,
+            "cpo_revenue_actual": round(sum(s["cpo_revenue"] for s in store_rows), 2),
+            "cpo_attach_activations_count": sum(s["cpo_attach_count"] for s in store_rows),
             "cpo_avg_sale": 0.0,
-            "trade_in_units": 0,
-            "repairs_oow_volume": 0,
-            "repairs_oow_revenue": 0.0,
+            "trade_in_units": sum(s["trade_in_units"] for s in store_rows),
+            "repairs_oow_volume": sum(s["repairs_oow"] for s in store_rows),
+            "repairs_oow_revenue": round(sum(s["repairs_oow_rev"] for s in store_rows), 2),
             "repairs_oow_daily_avg": 0.0,
-            "repair_attach_activations_count": 0,
-            "repairs_insurance_volume": 0,
-            "repairs_insurance_revenue": 0.0,
-            "accessories_volume": 0,
-            "accessories_revenue": 0.0,
-            "protection_bundles_volume": 0,
-            "foot_traffic_total": 0,
+            "repair_attach_activations_count": sum(s["repair_attach_count"] for s in store_rows),
+            "repairs_insurance_volume": sum(s["repairs_insurance"] for s in store_rows),
+            "repairs_insurance_revenue": round(sum(s["repairs_ins_rev"] for s in store_rows), 2),
+            "repairs_total_volume": sum(s["repairs_oow"] + s["repairs_insurance"] for s in store_rows),
+            "repairs_total_revenue": round(sum(s["repairs_oow_rev"] + s["repairs_ins_rev"] for s in store_rows), 2),
+            "accessories_volume": sum(s["accessories_volume"] for s in store_rows),
+            "accessories_revenue": round(sum(s["accessories_rev"] for s in store_rows), 2),
+            "protection_bundles_volume": sum(s["protection_bundles"] for s in store_rows),
+            "foot_traffic_total": sum(s["traffic"] for s in store_rows),
             "foot_traffic_daily_avg": 0.0,
             "foot_traffic_7day_ma": 0.0,
             "tickets_opened_7day_ma": 0.0,
         }
 
-        store_rows = []
-        for r in rows:
-            loc = r.get('locations') or {}
-            # Requirement: Total Activations is Total New Activations plus Migrations
-            act_new = int(r.get('activations_new') or 0)
-            act_mig = int(r.get('activations_migrations') or 0)
-            r['activations_total'] = act_new + act_mig
-
-            for k in summary:
-                val = r.get(k) or 0
-                summary[k] += float(val) if isinstance(val, (int, float)) else 0
-
-            # Store level item
-            store_rows.append({
-                "location_id": r.get('location_id'),
-                "store_number": loc.get('store_number'),
-                "name": loc.get('name'),
-                "region": loc.get('region'),
-                "store_type": loc.get('store_type'),
-                "revenue": float(r.get('gross_revenue_actual') or 0),
-                "revenue_projected": float(r.get('gross_revenue_projected') or 0),
-                "sales_volume": int(r.get('sales_volume') or 0),
-                "activations": int(r.get('activations_total') or 0),
-                "cpo_units": int(r.get('cpo_units_actual') or 0),
-                "cpo_revenue": float(r.get('cpo_revenue_actual') or 0),
-                "cpo_attach_pct": round(float(r.get('cpo_attach_activations_pct') or 0) * 100, 1),
-                "repairs_oow": int(r.get('repairs_oow_volume') or 0),
-                "repairs_oow_rev": float(r.get('repairs_oow_revenue') or 0),
-                "repairs_insurance": int(r.get('repairs_insurance_volume') or 0),
-                "repairs_ins_rev": float(r.get('repairs_insurance_revenue') or 0),
-                "accessories_rev": float(r.get('accessories_revenue') or 0),
-                "protection_bundles": int(r.get('protection_bundles_volume') or 0),
-                "traffic": int(r.get('foot_traffic_total') or 0),
-                "conversion_rate_pct": float(r.get('conversion_rate_pct') or 0)
-            })
-
-        store_count = len(rows)
-        # Calculate rates
+        # Calculate summary rates
         summary["cpo_attach_rate_pct"] = round((summary["cpo_attach_activations_count"] / summary["cpo_units_actual"] * 100.0) if summary["cpo_units_actual"] > 0 else 0.0, 1)
         summary["repair_attach_rate_pct"] = round((summary["repair_attach_activations_count"] / summary["repairs_oow_volume"] * 100.0) if summary["repairs_oow_volume"] > 0 else 0.0, 1)
-        summary["conversion_rate_pct"] = round(((summary["activations_total"] + summary["cpo_units_actual"] + summary["repairs_oow_volume"]) / summary["foot_traffic_total"] * 100.0) if summary["foot_traffic_total"] > 0 else 0.0, 2)
+        tot_sales = summary["activations_total"] + summary["cpo_units_actual"] + summary["repairs_oow_volume"]
+        summary["conversion_rate_pct"] = round((tot_sales / summary["foot_traffic_total"] * 100.0) if summary["foot_traffic_total"] > 0 else 0.0, 2)
         summary["asp"] = round(summary["gross_revenue_actual"] / summary["sales_volume"], 2) if summary["sales_volume"] > 0 else 0.0
-        summary["daily_avg_revenue"] = round(summary["daily_avg_revenue"] / store_count, 2) if store_count > 0 else 0.0
+        summary["daily_avg_revenue"] = round(summary["gross_revenue_actual"] / (store_count * (len(selected_pids) * 30 or 1)), 2) if store_count > 0 else 0.0
 
-        # 1. Regional, Global & Portfolio Benchmarks
+        # Benchmarks: Regional, Global & Portfolio (aggregated across the selected periods)
         regional_benchmark = {}
         global_benchmark = {}
         portfolio_benchmark = {}
         try:
-            bm_all_resp = supabase.table('monthly_kpis').select('gross_revenue_actual, sales_volume, activations_total, cpo_units_actual, repairs_oow_volume, foot_traffic_total, location_id, locations!inner(region, store_type)').eq('period_id', period_id).eq('locations.store_type', 'franchise').execute()
+            bm_query = supabase.table('monthly_kpis').select('gross_revenue_actual, sales_volume, activations_total, cpo_units_actual, repairs_oow_volume, foot_traffic_total, location_id, locations!inner(region, store_type)').eq('locations.store_type', 'franchise')
+            if len(selected_pids) == 1:
+                bm_query = bm_query.eq('period_id', selected_pids[0])
+            else:
+                bm_query = bm_query.in_('period_id', selected_pids)
+
+            bm_all_resp = bm_query.execute()
             all_bm_rows = bm_all_resp.data or []
             if all_bm_rows:
-                sample_reg = store_rows[0].get('region', 'WEST') if store_rows else 'WEST'
-                reg_rows = [r for r in all_bm_rows if r.get('locations', {}).get('region') == sample_reg]
+                # Group benchmark rows by store to get multi-period totals per store
+                bm_store_map = {}
+                for r in all_bm_rows:
+                    lid = r.get('location_id')
+                    reg = r.get('locations', {}).get('region', 'WEST')
+                    if lid not in bm_store_map:
+                        bm_store_map[lid] = {
+                            "region": reg, "rev": 0.0, "vol": 0, "act": 0, "cpo": 0, "rep": 0, "trf": 0
+                        }
+                    b = bm_store_map[lid]
+                    b["rev"] += float(r.get('gross_revenue_actual') or 0)
+                    b["vol"] += int(r.get('sales_volume') or 0)
+                    b["act"] += int(r.get('activations_total') or 0)
+                    b["cpo"] += int(r.get('cpo_units_actual') or 0)
+                    b["rep"] += int(r.get('repairs_oow_volume') or 0)
+                    b["trf"] += int(r.get('foot_traffic_total') or 0)
 
-                def make_bm_dict(rows_subset, lbl, reg_name=None):
-                    c = len(rows_subset)
+                sample_reg = store_rows[0].get('region', 'WEST') if store_rows else 'WEST'
+                reg_stores = [s for s in bm_store_map.values() if s["region"] == sample_reg]
+                all_stores = list(bm_store_map.values())
+
+                def make_bm_dict(store_list, lbl, reg_name=None):
+                    c = len(store_list)
                     if c == 0: return {}
-                    tot_act = sum(int(x.get('activations_total') or 0) for x in rows_subset)
-                    tot_cpo = sum(int(x.get('cpo_units_actual') or 0) for x in rows_subset)
-                    tot_rep = sum(int(x.get('repairs_oow_volume') or 0) for x in rows_subset)
-                    tot_traf = sum(int(x.get('foot_traffic_total') or 0) for x in rows_subset)
+                    tot_rev = sum(x["rev"] for x in store_list)
+                    tot_vol = sum(x["vol"] for x in store_list)
+                    tot_act = sum(x["act"] for x in store_list)
+                    tot_cpo = sum(x["cpo"] for x in store_list)
+                    tot_rep = sum(x["rep"] for x in store_list)
+                    tot_traf = sum(x["trf"] for x in store_list)
                     return {
                         "label": lbl,
                         "region": reg_name or "National",
                         "store_count": c,
-                        "avg_revenue": round(sum(float(x.get('gross_revenue_actual') or 0) for x in rows_subset) / c, 2),
-                        "avg_sales_volume": round(sum(int(x.get('sales_volume') or 0) for x in rows_subset) / c, 1),
+                        "avg_revenue": round(tot_rev / c, 2),
+                        "avg_sales_volume": round(tot_vol / c, 1),
                         "avg_activations": round(tot_act / c, 1),
                         "avg_cpo": round(tot_cpo / c, 1),
                         "avg_repairs": round(tot_rep / c, 1),
@@ -243,24 +361,26 @@ def get_scorecard_data():
                         "conversion_rate_pct": round(((tot_act + tot_cpo + tot_rep) / tot_traf) * 100, 2) if tot_traf > 0 else 0.0
                     }
 
-                regional_benchmark = make_bm_dict(reg_rows, f"{sample_reg} Region Average", sample_reg)
-                global_benchmark = make_bm_dict(all_bm_rows, "Global Network Average (All Stores)")
+                regional_benchmark = make_bm_dict(reg_stores, f"{sample_reg} Region Average", sample_reg)
+                global_benchmark = make_bm_dict(all_stores, "Global Network Average (All Stores)")
 
                 # User's Portfolio Benchmark
                 user_acc_resp = supabase.table('user_location_access').select('location_id').eq('user_id', user['id']).execute()
                 user_loc_ids = {r['location_id'] for r in (user_acc_resp.data or [])}
                 if user_loc_ids and len(user_loc_ids) > 1:
-                    port_rows = [r for r in all_bm_rows if r.get('location_id') in user_loc_ids]
-                    if port_rows:
-                        portfolio_benchmark = make_bm_dict(port_rows, f"Your Portfolio Average ({len(port_rows)} Stores)")
+                    port_stores = [bm_store_map[lid] for lid in user_loc_ids if lid in bm_store_map]
+                    if port_stores:
+                        portfolio_benchmark = make_bm_dict(port_stores, f"Your Portfolio Average ({len(port_stores)} Stores)")
         except Exception as e:
             print(f"[WARN] Benchmark error: {e}")
 
-        # Sort store rows by revenue descending
-        store_rows.sort(key=lambda x: x["revenue"], reverse=True)
-
         return jsonify({
-            "period_id": period_id,
+            "period_id": period_id or (selected_pids[0] if selected_pids else None),
+            "is_range": is_range,
+            "range_label": range_label,
+            "month_count": len(matching_periods) if is_range else 1,
+            "start_period_id": start_period_id,
+            "end_period_id": end_period_id,
             "count": store_count,
             "summary": summary,
             "store_rows": store_rows,
@@ -269,6 +389,9 @@ def get_scorecard_data():
             "global_benchmark": global_benchmark,
             "portfolio_benchmark": portfolio_benchmark
         })
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -627,13 +750,42 @@ def get_monthly_trend():
 def export_csv():
     user = session['user']
     period_id = request.args.get('period_id')
+    start_period_id = request.args.get('start_period_id')
+    end_period_id = request.args.get('end_period_id')
     loc_param = request.args.get('location_id', 'all')
 
     allowed, target_loc_ids = verify_location_access(user, loc_param)
     if not allowed:
         return Response("Unauthorized", status=403)
 
-    if target_loc_ids == []:
+    is_range = bool(start_period_id and end_period_id and start_period_id != end_period_id)
+    selected_pids = []
+    filename = "scorecard_export.csv"
+
+    if is_range:
+        p_resp = supabase.table('scorecard_periods').select('id, label, start_date, end_date').order('start_date').execute()
+        all_periods = p_resp.data or []
+        start_p = next((p for p in all_periods if p['id'] == start_period_id), None)
+        end_p = next((p for p in all_periods if p['id'] == end_period_id), None)
+
+        if start_p and end_p:
+            min_date = min(start_p['start_date'], end_p['start_date'])
+            max_date = max(start_p['end_date'], end_p['end_date'])
+            matching_periods = [
+                p for p in all_periods 
+                if min_date <= p['start_date'] and p['end_date'] <= max_date
+                and not (p['label'] == 'Jan 26 MTD' and any(x['label'] == 'Jan 26' for x in all_periods if min_date <= x['start_date'] and x['end_date'] <= max_date))
+            ]
+            selected_pids = [p['id'] for p in matching_periods]
+            filename = f"scorecard_{start_p['label']}_to_{end_p['label']}.csv"
+
+    if not selected_pids:
+        if not period_id:
+            p_resp = supabase.table('scorecard_periods').select('id, label').order('end_date', desc=True).limit(1).execute()
+            period_id = p_resp.data[0]['id'] if p_resp.data else None
+        selected_pids = [period_id] if period_id else []
+
+    if target_loc_ids == [] or not selected_pids:
         si = io.StringIO()
         cw = csv.writer(si)
         cw.writerow([
@@ -646,14 +798,69 @@ def export_csv():
         return Response(
             si.getvalue(),
             mimetype="text/csv",
-            headers={"Content-Disposition": "attachment;filename=scorecard_export.csv"}
+            headers={"Content-Disposition": f"attachment;filename={filename}"}
         )
 
-    query = supabase.table('monthly_kpis').select('*, locations(store_number, name, region)').eq('period_id', period_id)
+    query = supabase.table('monthly_kpis').select('*, locations(store_number, name, region)')
+    if len(selected_pids) == 1:
+        query = query.eq('period_id', selected_pids[0])
+    else:
+        query = query.in_('period_id', selected_pids)
+
     if target_loc_ids is not None:
         query = query.in_('location_id', target_loc_ids)
     
     rows = query.execute().data or []
+
+    # Aggregate by store
+    store_agg = {}
+    for r in rows:
+        lid = r.get('location_id')
+        loc = r.get('locations') or {}
+        act_new = int(r.get('activations_new') or 0)
+        act_mig = int(r.get('activations_migrations') or 0)
+        act_tot = act_new + act_mig
+
+        if lid not in store_agg:
+            store_agg[lid] = {
+                "store_number": loc.get('store_number'),
+                "name": loc.get('name'),
+                "region": loc.get('region'),
+                "rev": 0.0,
+                "rev_proj": 0.0,
+                "vol": 0,
+                "act": 0,
+                "act_new": 0,
+                "act_ren": 0,
+                "cpo_u": 0,
+                "cpo_r": 0.0,
+                "cpo_att": 0,
+                "oow_v": 0,
+                "oow_r": 0.0,
+                "ins_v": 0,
+                "ins_r": 0.0,
+                "acc_r": 0.0,
+                "prot_v": 0,
+                "trf": 0
+            }
+
+        s = store_agg[lid]
+        s["rev"] += float(r.get('gross_revenue_actual') or 0)
+        s["rev_proj"] += float(r.get('gross_revenue_projected') or 0)
+        s["vol"] += int(r.get('sales_volume') or 0)
+        s["act"] += act_tot
+        s["act_new"] += act_new
+        s["act_ren"] += int(r.get('activations_renewals') or 0)
+        s["cpo_u"] += int(r.get('cpo_units_actual') or 0)
+        s["cpo_r"] += float(r.get('cpo_revenue_actual') or 0)
+        s["cpo_att"] += int(r.get('cpo_attach_activations_count') or 0)
+        s["oow_v"] += int(r.get('repairs_oow_volume') or 0)
+        s["oow_r"] += float(r.get('repairs_oow_revenue') or 0)
+        s["ins_v"] += int(r.get('repairs_insurance_volume') or 0)
+        s["ins_r"] += float(r.get('repairs_insurance_revenue') or 0)
+        s["acc_r"] += float(r.get('accessories_revenue') or 0)
+        s["prot_v"] += int(r.get('protection_bundles_volume') or 0)
+        s["trf"] += int(r.get('foot_traffic_total') or 0)
 
     si = io.StringIO()
     cw = csv.writer(si)
@@ -665,34 +872,39 @@ def export_csv():
         "Protection Bundles", "Foot Traffic", "Conversion Rate %"
     ])
 
-    for r in rows:
-        loc = r.get('locations') or {}
+    sorted_stores = sorted(store_agg.values(), key=lambda x: x["rev"], reverse=True)
+    for s in sorted_stores:
+        asp = round(s["rev"] / s["vol"], 2) if s["vol"] > 0 else 0.0
+        cpo_att_pct = round((s["cpo_att"] / s["cpo_u"] * 100), 1) if s["cpo_u"] > 0 else 0.0
+        tot_sales = s["act"] + s["cpo_u"] + s["oow_v"]
+        cnv_pct = round((tot_sales / s["trf"] * 100), 2) if s["trf"] > 0 else 0.0
+
         cw.writerow([
-            loc.get('store_number'),
-            loc.get('name'),
-            loc.get('region'),
-            r.get('gross_revenue_actual'),
-            r.get('gross_revenue_projected'),
-            r.get('sales_volume'),
-            r.get('asp'),
-            r.get('activations_total'),
-            r.get('activations_new'),
-            r.get('activations_renewals'),
-            r.get('cpo_units_actual'),
-            r.get('cpo_revenue_actual'),
-            r.get('cpo_attach_activations_pct'),
-            r.get('repairs_oow_volume'),
-            r.get('repairs_oow_revenue'),
-            r.get('repairs_insurance_volume'),
-            r.get('repairs_insurance_revenue'),
-            r.get('accessories_revenue'),
-            r.get('protection_bundles_volume'),
-            r.get('foot_traffic_total'),
-            r.get('conversion_rate_pct')
+            s["store_number"],
+            s["name"],
+            s["region"],
+            round(s["rev"], 2),
+            round(s["rev_proj"], 2),
+            s["vol"],
+            asp,
+            s["act"],
+            s["act_new"],
+            s["act_ren"],
+            s["cpo_u"],
+            round(s["cpo_r"], 2),
+            cpo_att_pct,
+            s["oow_v"],
+            round(s["oow_r"], 2),
+            s["ins_v"],
+            round(s["ins_r"], 2),
+            round(s["acc_r"], 2),
+            s["prot_v"],
+            s["trf"],
+            cnv_pct
         ])
 
     return Response(
         si.getvalue(),
         mimetype="text/csv",
-        headers={"Content-Disposition": "attachment;filename=scorecard_export.csv"}
+        headers={"Content-Disposition": f"attachment;filename={filename}"}
     )

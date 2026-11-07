@@ -120,19 +120,113 @@ function onLocationSelectionChange() {
   loadDashboardData();
 }
 
+// Period Mode & Custom Range Filtering State
+let periodFilterMode = "single"; // 'single' | 'range'
+let currentRangePreset = "all-time";
+
+function setPeriodFilterMode(mode) {
+  periodFilterMode = mode;
+  const btnSingle = document.getElementById("btn-mode-single");
+  const btnRange = document.getElementById("btn-mode-range");
+  const singleContainer = document.getElementById("single-period-container");
+  const rangeContainer = document.getElementById("range-period-container");
+  const rangeBanner = document.getElementById("range-indicator-banner");
+
+  if (mode === "range") {
+    btnSingle?.classList.remove("active");
+    btnRange?.classList.add("active");
+    if (singleContainer) singleContainer.style.display = "none";
+    if (rangeContainer) rangeContainer.style.display = "flex";
+    if (rangeBanner) rangeBanner.style.display = "flex";
+  } else {
+    btnSingle?.classList.add("active");
+    btnRange?.classList.remove("active");
+    if (singleContainer) singleContainer.style.display = "flex";
+    if (rangeContainer) rangeContainer.style.display = "none";
+    if (rangeBanner) rangeBanner.style.display = "none";
+  }
+  loadDashboardData();
+}
+
+function applyPeriodPreset(preset) {
+  currentRangePreset = preset;
+  document.querySelectorAll(".btn-preset-pill").forEach(btn => {
+    btn.classList.toggle("active", btn.id === `preset-${preset}`);
+  });
+
+  const startSel = document.getElementById("period-start-select");
+  const endSel = document.getElementById("period-end-select");
+  if (!startSel || !endSel) return;
+
+  const startOptions = Array.from(startSel.options);
+  const endOptions = Array.from(endSel.options);
+
+  if (preset === "all-time") {
+    startSel.selectedIndex = 0;
+    endSel.selectedIndex = endOptions.length - 1;
+  } else if (preset === "year-2025") {
+    const idx25Start = startOptions.findIndex(o => o.text.includes("Jan 2025"));
+    const idx25End = endOptions.findIndex(o => o.text.includes("Dec 2025"));
+    if (idx25Start !== -1) startSel.selectedIndex = idx25Start;
+    if (idx25End !== -1) endSel.selectedIndex = idx25End;
+  } else if (preset === "ytd-2026") {
+    const idx26Start = startOptions.findIndex(o => o.text.includes("Jan 26") && !o.text.includes("Jan 2025"));
+    if (idx26Start !== -1) startSel.selectedIndex = idx26Start;
+    endSel.selectedIndex = endOptions.length - 1;
+  } else if (preset === "trailing-6m") {
+    const total = endOptions.length;
+    startSel.selectedIndex = Math.max(0, total - 6);
+    endSel.selectedIndex = total - 1;
+  } else if (preset === "trailing-3m") {
+    const total = endOptions.length;
+    startSel.selectedIndex = Math.max(0, total - 3);
+    endSel.selectedIndex = total - 1;
+  }
+
+  loadDashboardData();
+}
+
+function onRangeChange() {
+  document.querySelectorAll(".btn-preset-pill").forEach(btn => btn.classList.remove("active"));
+  loadDashboardData();
+}
+
 // Fetch scorecard data and render everything
 async function loadDashboardData() {
-  const periodSelect = document.getElementById("period-select");
-  if (!periodSelect) return;
-
   const locParam = getSelectedLocationIds();
-  const periodId = periodSelect.value;
+  let url = `/api/scorecard-data?location_id=${locParam}`;
+
+  if (periodFilterMode === "range") {
+    const startSel = document.getElementById("period-start-select");
+    const endSel = document.getElementById("period-end-select");
+    const startId = startSel ? startSel.value : "";
+    const endId = endSel ? endSel.value : "";
+    url += `&start_period_id=${startId}&end_period_id=${endId}`;
+  } else {
+    const periodSelect = document.getElementById("period-select");
+    const periodId = periodSelect ? periodSelect.value : "";
+    url += `&period_id=${periodId}`;
+  }
 
   try {
-    const res = await fetch(`/api/scorecard-data?period_id=${periodId}&location_id=${locParam}`);
+    const res = await fetch(url);
     if (!res.ok) throw new Error("Failed to fetch scorecard data");
     const data = await res.json();
     currentScorecardData = data;
+
+    // Range indicator banner updates
+    const rangeBanner = document.getElementById("range-indicator-banner");
+    if (rangeBanner) {
+      if (data.is_range) {
+        rangeBanner.style.display = "flex";
+        const lbl = document.getElementById("range-banner-label");
+        const months = document.getElementById("range-banner-months");
+        if (lbl) lbl.innerText = data.range_label || "Selected Multi-Month Range";
+        if (months) months.innerText = data.month_count || "Multiple";
+      } else {
+        rangeBanner.style.display = "none";
+      }
+    }
 
     updateExecutiveTab(data);
     updateActivationsTab(data);
@@ -1988,8 +2082,16 @@ function initParamToggles() {
 }
 
 function exportData() {
-  const periodSelect = document.getElementById("period-select");
-  if (!periodSelect) return;
   const locParam = getSelectedLocationIds();
-  window.location.href = `/api/export-csv?period_id=${periodSelect.value}&location_id=${locParam}`;
+  if (periodFilterMode === "range") {
+    const startSel = document.getElementById("period-start-select");
+    const endSel = document.getElementById("period-end-select");
+    const startId = startSel ? startSel.value : "";
+    const endId = endSel ? endSel.value : "";
+    window.location.href = `/api/export-csv?start_period_id=${startId}&end_period_id=${endId}&location_id=${locParam}`;
+  } else {
+    const periodSelect = document.getElementById("period-select");
+    const periodId = periodSelect ? periodSelect.value : "";
+    window.location.href = `/api/export-csv?period_id=${periodId}&location_id=${locParam}`;
+  }
 }

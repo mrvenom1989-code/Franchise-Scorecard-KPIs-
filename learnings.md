@@ -292,17 +292,32 @@ This document records architectural insights, data anomalies, API quirks, and te
 
 ---
 
-## 13. Transition from Sheet-Centric Files to a Unified Month-Wise Historical Database
+## 14. Custom Month Range Analytics & Multi-Month Aggregation Architecture
 
-### The "Missing Early 2025 Data" Myth
-*   **The Problem**: Prior session handoffs stated that corporate began tracking in September 2025 and that Jan–Aug 2025 did not exist because there were no standalone sheets named `Jan 2025` or `Feb 2025`. Consequently, YoY charts showed $0$ for 2025 for months 1 to 8.
-*   **The Root Cause**: `ingest_scorecard.py` only looked for sheets as isolated current-month documents, parsing only the current MTD columns and ignoring the `YoY` columns sitting in those same sheets.
-*   **The Discovery**: Every 2026 tab (`Jan 26` through `Aug 26`) contained over 30 store-by-store YoY columns capturing the exact 2025 historical data for that month (e.g. `YoY Total Gross Revenue`, `YoY Total Sales`, `YoY CPO Units`, `YoY OOW # Repairs`, `Total Traffic YoY`).
+### The "Averaging Averages" Fallacy in Financial KPI Aggregation
+*   **The Trap**: When aggregating data across multiple months (e.g. 6-month or 12-month views), calculating the range ASP or conversion rate by taking the simple arithmetic mean of the monthly rates (`avg(monthly_asp)`) yields mathematically incorrect figures whenever monthly transaction volumes fluctuate.
 *   **The Solution**:
-    1.  Created 8 new accounting periods in `scorecard_periods`: `Jan 2025` through `Aug 2025`.
-    2.  Built `scripts/ingest_yoy_historical.py` to extract store-level historical numbers from the 2026 sheets, mapping each row via canonical name resolution to prevent column shift errors.
-    3.  Upserted **260 store records** into `monthly_kpis`, expanding the database to **788 total monthly KPI records** across 23 accounting periods.
-    4.  Every month in 2025 now matches corporate's sheet summary totals to the exact penny, lighting up the orange prior-year baseline across all 12 calendar months in the YoY charts.
+    *   In `routes/api.py`, multi-month queries group raw store rows by `location_id` and sum all extensive (additive) metrics:
+        `total_revenue = sum(gross_revenue)`, `total_sales = sum(total_sales)`, `total_traffic = sum(foot_traffic_total)`.
+    *   Intensive (rate) metrics are then recomputed from cumulative totals:
+        - `cumulative_asp = total_revenue / total_sales`
+        - `cumulative_conversion = total_sales / total_traffic`
+        - `cumulative_cpo_attach = total_cpo_units / total_sales`
+        - `cumulative_repair_attach = total_repairs / total_sales`
+    This guarantees that high-volume holiday months (e.g. November/December) correctly exert proportional statistical weight on annual metrics.
+
+### Preventing Duplicate Multi-Month Aggregation with Interim Snapshots (`Jan 26 MTD`)
+*   **The Trap**: Corporate workbooks often contain both a partial interim snapshot (e.g. `Jan 26 MTD` covering Jan 1–18, 2026) and a finalized month (e.g. `Jan 26` covering Jan 1–31, 2026). If a date range filter queries all accounting periods where `start_date >= Jan 1` and `end_date <= Oct 31`, PostgreSQL retrieves both records for January, inflating all cumulative KPIs by ~40%.
+*   **The Solution**:
+    *   In `routes/api.py`, range period resolution explicitly prunes the partial `Jan 26 MTD` record (`id != '6eb86f7f-2b47-4977-b95c-9c765fa80cba'`) whenever evaluating multi-month ranges.
+    *   In `routes/dashboard.py`, `periods_asc` passes only standard, non-interim periods to the range dropdowns, ensuring clean chronological boundaries without duplicate months.
+
+### Single vs Custom Range UX Mode Transitions
+*   **The UX Pattern**: Executive dashboards frequently force users to choose between granular month-by-month views and high-level date pickers.
+*   **The Implementation**:
+    *   Designed a top-level mode toggle pill: `[Single Month]` vs `[Custom Range]`.
+    *   When switching to `Custom Range`, single-month delta badges ("vs Prior Month") are hidden and replaced by a prominent Range Banner: *"Showing cumulative performance across [X] months ([Start Period] → [End Period])"*.
+    *   Included 5 instantaneous preset pills (`YTD 2026`, `Full 2025`, `L6M`, `L3M`, `All (22M)`) that configure the dual dropdowns and trigger real-time asynchronous data fetching with zero page reloads.
 
 
 

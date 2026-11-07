@@ -11,9 +11,15 @@ def index():
     
     # Fetch available scorecard periods (ordered by end_date desc)
     periods = []
+    periods_asc = []
     try:
         p_resp = supabase.table('scorecard_periods').select('*').order('end_date', desc=True).execute()
         periods = p_resp.data or []
+        # Chronological list for range selectors (excluding interim snapshot Jan 26 MTD for clean monthly flow)
+        periods_asc = sorted(
+            [p for p in periods if p.get('label') != 'Jan 26 MTD'],
+            key=lambda x: x.get('start_date', '')
+        )
     except Exception as e:
         print(f"[ERROR] Fetching periods: {e}")
 
@@ -34,5 +40,6 @@ def index():
         'dashboard.html',
         user=user,
         periods=periods,
+        periods_asc=periods_asc,
         locations=locations
     )

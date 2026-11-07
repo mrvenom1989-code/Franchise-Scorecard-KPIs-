@@ -51,14 +51,49 @@
       {% endif %}
     </div>
 
-    <!-- Time Period Selector -->
-    <div style="display: flex; align-items: center; gap: 8px;">
-      <i data-feather="calendar" style="width: 16px; height: 16px; color: var(--accent-cyan);"></i>
-      <select id="period-select" class="select-control" onchange="loadDashboardData()">
-        {% for p in periods %}
-        <option value="{{ p.id }}">{{ p.label }} ({{ p.period_type }})</option>
-        {% endfor %}
-      </select>
+    <!-- Time Period & Custom Range Selector -->
+    <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+      <!-- Mode Switcher -->
+      <div class="period-mode-toggle">
+        <button type="button" id="btn-mode-single" class="btn-period-mode active" onclick="setPeriodFilterMode('single')">Single Month</button>
+        <button type="button" id="btn-mode-range" class="btn-period-mode" onclick="setPeriodFilterMode('range')">Custom Range</button>
+      </div>
+
+      <!-- Single Month Selector -->
+      <div id="single-period-container" style="display: flex; align-items: center; gap: 6px;">
+        <i data-feather="calendar" style="width: 15px; height: 15px; color: var(--accent-cyan);"></i>
+        <select id="period-select" class="select-control" onchange="loadDashboardData()">
+          {% for p in periods %}
+          <option value="{{ p.id }}">{{ p.label }} ({{ p.period_type }})</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <!-- Custom Range Selector (From -> To) -->
+      <div id="range-period-container" style="display: none; align-items: center; gap: 6px; flex-wrap: wrap;">
+        <span style="font-size: 0.75rem; font-weight: 600; color: var(--text-muted);">From:</span>
+        <select id="period-start-select" class="select-control" style="font-size: 0.8rem; padding: 5px 8px;" onchange="onRangeChange()">
+          {% for p in periods_asc %}
+          <option value="{{ p.id }}" {% if loop.first %}selected{% endif %}>{{ p.label }}</option>
+          {% endfor %}
+        </select>
+
+        <span style="font-size: 0.75rem; font-weight: 600; color: var(--text-muted);">To:</span>
+        <select id="period-end-select" class="select-control" style="font-size: 0.8rem; padding: 5px 8px;" onchange="onRangeChange()">
+          {% for p in periods_asc %}
+          <option value="{{ p.id }}" {% if loop.last %}selected{% endif %}>{{ p.label }}</option>
+          {% endfor %}
+        </select>
+
+        <!-- Quick Range Presets -->
+        <div style="display: flex; gap: 4px; align-items: center; margin-left: 4px;">
+          <button type="button" id="preset-ytd-2026" class="btn-preset-pill" onclick="applyPeriodPreset('ytd-2026')">YTD 2026</button>
+          <button type="button" id="preset-year-2025" class="btn-preset-pill" onclick="applyPeriodPreset('year-2025')">Full 2025</button>
+          <button type="button" id="preset-trailing-6m" class="btn-preset-pill" onclick="applyPeriodPreset('trailing-6m')">L6M</button>
+          <button type="button" id="preset-trailing-3m" class="btn-preset-pill" onclick="applyPeriodPreset('trailing-3m')">L3M</button>
+          <button type="button" id="preset-all-time" class="btn-preset-pill active" onclick="applyPeriodPreset('all-time')">All (22M)</button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -102,6 +137,19 @@
 
 <!-- Main Tabbed Dashboard Content -->
 <div class="dashboard-content">
+
+  <!-- Range Indicator Banner (Shown in Custom Range Mode) -->
+  <div id="range-indicator-banner" class="range-indicator-banner" style="display: none;">
+    <div style="display: flex; align-items: center; gap: 10px;">
+      <i data-feather="calendar" style="width: 16px; height: 16px; color: var(--accent-cyan);"></i>
+      <span style="font-size: 0.88rem; font-weight: 600; color: #f8fafc;">
+        Viewing Cumulative Franchise Performance: <span id="range-banner-label" style="color: var(--accent-cyan); font-weight: 700;">Jan 2025 – Oct 2026</span> (<span id="range-banner-months">22</span> Months)
+      </span>
+    </div>
+    <span class="role-pill" style="background: rgba(14, 165, 233, 0.15); color: #38bdf8; border: 1px solid rgba(14, 165, 233, 0.3); font-weight: 700; font-size: 0.75rem;">
+      Aggregated Range Overview
+    </span>
+  </div>
 
   <!-- ==================== TAB 1: EXECUTIVE PULSE ==================== -->
   <div id="tab-executive" class="tab-panel active">
@@ -625,5 +673,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="{{ url_for('static', filename='js/dashboard.js') }}?v=1.5"></script>
+<script src="{{ url_for('static', filename='js/dashboard.js') }}?v=1.6"></script>
 {% endblock %}

@@ -251,9 +251,39 @@ Server runs at `http://127.0.0.1:5001`.
    * Because `routes/api.py` automatically pairs months by calendar month number (`m_idx = 1..12`), the **Monthly Revenue Trend & YoY Overlay** chart (and detail charts for Activations, CPO, Repairs, and Traffic) now displays full, non-zero orange 2025 baseline bars across **all 12 calendar months**.
    * Updated dashboard info notes in `templates/dashboard.html` confirming full 12-month historical availability.
 
-2. **High-Visibility Badge Pill Data Labels**:
+3. **High-Visibility Badge Pill Data Labels**:
    * Overhauled all data labels into executive pill badges with solid dark backdrops (`rgba(15, 23, 42, 0.95)`), 1.5px colored borders matching each metric, 11px bold typography, and padding.
    * Numbers never blend into dark backgrounds, lines, or bars.
    * Brightened all X-axis ticks to `#e2e8f0` (Slate 200, weight 600) and card subtitles to `#cbd5e1`.
    * Upgraded Activations color palette: New Activations (Indigo Blue `#6366f1`), Migrations (Sky Cyan `#0ea5e9`), Total Activations Line (Glowing Amber Gold `#f59e0b`, 3.5px line width with white/gold points).
+
+---
+
+## 10. Custom Month Range Filter & Cumulative Multi-Month Analytics (November 7, 2026)
+
+1. **Dual-Mode Filtering Architecture**:
+   * Introduced an executive filter switch in the header: **Single Month** vs **Custom Range**.
+   * In **Single Month** mode, users inspect an individual accounting period with period-over-period delta indicators.
+   * In **Custom Range** mode, users select arbitrary start and end months (e.g. `Jan 2025` to `Oct 2026`) or 1-click presets:
+     - `YTD 2026` (Jan 2026 to Oct 2026 - 10 months)
+     - `Full 2025` (Jan 2025 to Dec 2025 - 12 months)
+     - `L6M` (May 2026 to Oct 2026 - 6 months)
+     - `L3M` (Aug 2026 to Oct 2026 - 3 months)
+     - `All (22M)` (Jan 2025 to Oct 2026 - 22 continuous months)
+
+2. **Interim Period Exclusion Rule**:
+   * Corporate files contain an interim snapshot `Jan 26 MTD` (Jan 1–18, 2026) alongside the full month `Jan 26` (Jan 1–31, 2026).
+   * Range resolution queries in `routes/api.py` automatically prune `Jan 26 MTD` from multi-month intervals, eliminating double counting of January metrics.
+
+3. **Cumulative Aggregation & Re-Weighted KPI Engine**:
+   * Backend endpoint `/api/scorecard-data` accepts `start_period_id` and `end_period_id`.
+   * Groups rows across the selected window by `location_id` into cumulative store summaries.
+   * Rates and averages are properly re-weighted on cumulative totals rather than averaging monthly percentages:
+     - Cumulative ASP = `total_revenue / total_sales_volume`
+     - Cumulative Conversion Rate = `total_sales_volume / total_foot_traffic`
+     - Cumulative CPO Attach Rate = `total_cpo_units / total_sales_volume`
+     - Cumulative Repair Attach Rate = `(oow_repairs + insurance_repairs) / total_sales_volume`
+   * Cumulative Network & Portfolio benchmarks dynamically scale across all selected months.
+   * Store Performance Leaderboard re-ranks the franchise network based on cumulative performance over the chosen timeframe.
+   * `/api/export-csv` generates multi-month cumulative CSV downloads with proper range header tags.
 
