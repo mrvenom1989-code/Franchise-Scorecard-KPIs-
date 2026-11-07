@@ -565,7 +565,7 @@ def get_monthly_trend():
             g["repairs_total_revenue"] = round(g["repairs_total_revenue"], 2)
             g["accessories_revenue"] = round(g["accessories_revenue"], 2)
             tot_sales = g["activations_total"] + g["cpo_units_actual"] + g["repairs_oow_volume"]
-            g["conversion_rate_pct"] = round((tot_sales / g["foot_traffic_total"] * 100), 2) if g["foot_traffic_total"] > 0 else 0.0
+            g["conversion_rate_pct"] = round((tot_sales / g["foot_traffic_total"] * 100), 2) if g["foot_traffic_total"] > 0 else None
 
         def calc_delta(c_val, p_val):
             diff = c_val - p_val

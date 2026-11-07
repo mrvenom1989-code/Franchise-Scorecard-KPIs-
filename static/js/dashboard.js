@@ -1952,6 +1952,7 @@ function renderMonthlyTrafficChart(trend, yoyByMonth, mode) {
             pointBorderWidth: 2,
             pointRadius: 4,
             tension: 0.3,
+            spanGaps: true,
             yAxisID: "y1",
             order: 1
           }
@@ -1971,7 +1972,10 @@ function renderMonthlyTrafficChart(trend, yoyByMonth, mode) {
             }
           },
           datalabels: {
-            display: true,
+            display: ctx => {
+              const val = ctx.dataset.data[ctx.dataIndex];
+              return val !== null && val !== undefined && val > 0;
+            },
             color: ctx => (ctx.datasetIndex === 0 ? "#fb7185" : "#34d399"),
             backgroundColor: "rgba(15, 23, 42, 0.95)",
             borderColor: ctx => (ctx.datasetIndex === 0 ? "#f43f5e" : "#10b981"),
