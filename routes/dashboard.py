@@ -15,9 +15,10 @@ def index():
     try:
         p_resp = supabase.table('scorecard_periods').select('*').order('end_date', desc=True).execute()
         periods = p_resp.data or []
-        # Chronological list for range selectors (excluding interim snapshot Jan 26 MTD for clean monthly flow)
+        # Chronological list for range selectors (excluding interim snapshots Jan 26 MTD and Oct 26 MTD for clean monthly flow)
+        has_full_oct = any(p.get('label') == 'Oct 26' for p in periods)
         periods_asc = sorted(
-            [p for p in periods if p.get('label') != 'Jan 26 MTD'],
+            [p for p in periods if p.get('label') != 'Jan 26 MTD' and not (has_full_oct and p.get('label') == 'Oct 26 MTD')],
             key=lambda x: x.get('start_date', '')
         )
     except Exception as e:

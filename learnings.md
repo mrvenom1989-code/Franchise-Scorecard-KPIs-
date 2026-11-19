@@ -331,6 +331,35 @@ This document records architectural insights, data anomalies, API quirks, and te
 *   **The Gotcha**: Passing float strings (e.g. `"787.0"`) to Postgres `INTEGER` columns raises SQL error `22P02: invalid input syntax for type integer: "787.0"`.
 *   **The Rule**: Always coerce numeric values destined for PostgreSQL integer columns using `int(round(float(val)))`.
 
+---
+
+## 16. Corporate Header Mutations & Mid-Month MTD Ingestion (`Nov 26 MTD` & `Oct 26` Finalized)
+
+### Handling Abbreviated Corporate Headers
+*   **The Problem**: In mid-month scorecards (such as `Nov 26 MTD`), corporate report authors frequently compress header labels to fit wider sheets on smaller displays, switching from `Total GrRev MTD` to `Total GrRev MTD`, `Total Sales` to `Sales Vol`, `Traffic MTD` to `Traffic Vol`, `All CPO Units MTD` to `CPO Vol MTD`, `Total Insurance Repairs MTD` to `Part/Ins Vol`, and `Total Insurance Rev MTD` to `Part/Ins Rev`.
+*   **The Solution**: Standardize header matching by using prioritized lists of regular expression alternatives in `get_val()`:
+    ```python
+    'sales_volume': get_val(r'^sales vol$|^total sales$', max_col=18),
+    'foot_traffic_total': get_val(r'^traffic vol$|^traffic mtd$', max_col=10),
+    'cpo_units_actual': get_val(r'^cpo vol mtd$|^all cpo units mtd$'),
+    'repairs_insurance_volume': get_val(r'^part/ins vol$|^total insurance repairs mtd$'),
+    'repairs_insurance_revenue': get_val(r'^part/ins rev$|^total insurance rev mtd$'),
+    ```
+    Always bound positional columns with `max_col` or `min_col` guards so MoM and YoY comparison columns with similar keywords are never mistakenly selected.
+
+### Dynamic Date Detection in Scorecard Header Rows
+*   **The Problem**: File cutoff dates (e.g., November 15, 2026) are not always found in Row 1. In `Nov 26 MTD`, Row 1 had `1-Nov-26`, Row 3 had `Avg`, and Row 4 had `15-Nov-26`. Scanning only Row 1 resulted in parsing falling back to the end of the month (Nov 30).
+*   **The Solution**: Scan all date cells across rows 1 through 5, setting the minimum discovered date as `start_date` and the maximum discovered date as `end_date`.
+
+### Automated Location Provisioning on Network Expansion
+*   **The Problem**: As the franchise network expands (e.g. 9 new corporate/franchise stores added in November 2026), hardcoded location dictionaries cause ingestion to drop records with foreign key violations.
+*   **The Solution**: Built automated provisioning directly into `ingest_scorecard.py`. When an uncataloged store number or store name is encountered during parsing, it queries Supabase for the highest existing slug or creates a clean slug, derives city and province, assigns default coordinates, and inserts the record into `locations` on the fly before parsing store KPIs.
+
+### Multi-Interim Pruning Pattern (`Jan 26 MTD` & `Oct 26 MTD`)
+*   **The Problem**: Multiple interim snapshots can exist in the accounting system simultaneously (e.g. `Jan 26 MTD` for Jan 1–18 and `Oct 26 MTD` for Oct 1–25). When full finalized months exist (`Jan 26` and `Oct 26`), any date range query or multi-month aggregation will double-count performance metrics unless all interim snapshots are systematically pruned.
+*   **The Solution**: Maintain an explicit list of interim period identifiers to exclude in `routes/dashboard.py` and `routes/api.py`, or filter out records where `label` ends in `MTD` when a finalized period for the same year-month is present.
+
+
 
 
 

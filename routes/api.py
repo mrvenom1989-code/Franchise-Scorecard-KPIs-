@@ -127,6 +127,7 @@ def get_scorecard_data():
                     p for p in all_periods 
                     if min_date <= p['start_date'] and p['end_date'] <= max_date
                     and not (p['label'] == 'Jan 26 MTD' and any(x['label'] == 'Jan 26' for x in all_periods if min_date <= x['start_date'] and x['end_date'] <= max_date))
+                    and not (p['label'] == 'Oct 26 MTD' and any(x['label'] == 'Oct 26' for x in all_periods if min_date <= x['start_date'] and x['end_date'] <= max_date))
                 ]
                 selected_pids = [p['id'] for p in matching_periods]
                 range_label = f"{matching_periods[0]['label']} – {matching_periods[-1]['label']}"
@@ -464,7 +465,9 @@ def get_monthly_trend():
     try:
         # Fetch all periods (exclude 'Jan 26 MTD' to prevent duplicate Jan data points)
         p_resp = supabase.table('scorecard_periods').select('id, label, start_date, end_date').order('start_date').execute()
-        periods = [p for p in (p_resp.data or []) if p['label'] != 'Jan 26 MTD']
+        all_p = p_resp.data or []
+        has_full_oct = any(p['label'] == 'Oct 26' for p in all_p)
+        periods = [p for p in all_p if p['label'] != 'Jan 26 MTD' and not (has_full_oct and p['label'] == 'Oct 26 MTD')]
         p_map = {p['id']: p for p in periods}
 
         # Query monthly_kpis for target locations

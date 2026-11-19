@@ -133,24 +133,20 @@ def parse_monthly_sheet(ws, sheet_name):
         metric = str(metric_row[idx]).strip() if metric_row[idx] is not None else f"col_{idx}"
         col_headers[idx] = f"{curr_cat}::{curr_sub}::{metric}".lower()
 
-    # Determine period start/end dates from rows 2 and 3
-    r2 = list(ws.iter_rows(min_row=2, max_row=2, values_only=True))[0]
-    r3 = list(ws.iter_rows(min_row=3, max_row=3, values_only=True))[0]
-    
-    period_start = None
-    for cell in r2:
-        if isinstance(cell, (datetime, date)):
-            period_start = cell.date() if isinstance(cell, datetime) else cell
-            break
-            
-    period_end = None
-    for cell in r3:
-        if isinstance(cell, (datetime, date)):
-            period_end = cell.date() if isinstance(cell, datetime) else cell
-            break
-            
-    if not period_start:
-        period_start = date(2026, 1, 1)
+    # Determine period start/end dates by scanning rows 1 to 5 for dates
+    dates_found = []
+    top_rows = list(ws.iter_rows(min_row=1, max_row=5, values_only=True))
+    for r in top_rows:
+        for cell in r:
+            if isinstance(cell, (datetime, date)):
+                d = cell.date() if isinstance(cell, datetime) else cell
+                if d not in dates_found:
+                    dates_found.append(d)
+
+    dates_found.sort()
+    period_start = dates_found[0] if dates_found else date(2026, 1, 1)
+    period_end = dates_found[-1] if len(dates_found) > 1 else None
+
     if not period_end:
         import calendar
         last_day = calendar.monthrange(period_start.year, period_start.month)[1]
@@ -213,13 +209,16 @@ def parse_monthly_sheet(ws, sheet_name):
 
         # Canonical metric extraction
         record["kpis"]["gross_revenue_actual"] = clean_num(get_val(
+            ["total grrev mtd"],
             ["total gross revenue mtd"],
             ["gross revenue mtd"],
+            ["grrev mtd"],
             ["all revenue", "mtd", "gross revenue"],
             ["gross revenue"],
-            forbidden=["projected", "mom total", "yoy total", "mom rev", "yoy rev", "%"]
+            forbidden=["projected", "proj", "mom total", "yoy total", "mom rev", "yoy rev", "mom grorev", "yoy grorev", "%"]
         ))
         record["kpis"]["gross_revenue_projected"] = clean_num(get_val(
+            ["proj total grrev"],
             ["projected total gross revenue"],
             ["projected gross revenue"],
             ["projected", "gross revenue"]
@@ -227,17 +226,20 @@ def parse_monthly_sheet(ws, sheet_name):
         record["kpis"]["gross_revenue_mom_delta"] = clean_num(get_val(
             ["mom rev delta"],
             ["mom", "rev delta"],
-            ["mom total gross revenue"]
+            ["mom total gross revenue"],
+            ["mom total grorev"]
         ))
         record["kpis"]["gross_revenue_yoy_delta"] = clean_num(get_val(
             ["yoy revenue delta"],
             ["yoy", "revenue delta"],
-            ["yoy total gross revenue"]
+            ["yoy total gross revenue"],
+            ["yoy total grorev"]
         ))
         record["kpis"]["sales_volume"] = int(clean_num(get_val(
             ["total sales"],
+            ["sales vol"],
             ["all revenue", "mtd", "total sales"],
-            forbidden=["projected", "mom", "yoy", "accessory", "volume %"]
+            forbidden=["projected", "proj", "mom", "yoy", "delta", "accessory", "volume %"]
         )))
         record["kpis"]["asp"] = clean_num(get_val(
             ["asp"],
@@ -252,28 +254,32 @@ def parse_monthly_sheet(ws, sheet_name):
 
         # Activations
         record["kpis"]["activations_total"] = int(clean_num(get_val(
+            ["act trans mtd (act + mig)"],
             ["total activation trans mtd"],
             ["total activation transactions mtd"],
             ["all activations", "mtd", "total activation transactions"],
             ["total activation"],
-            forbidden=["projected", "mom", "yoy", "%", "attach"]
+            forbidden=["projected", "proj", "mom", "yoy", "%", "attach"]
         )))
         record["kpis"]["activations_new"] = int(clean_num(get_val(
+            ["new act mtd"],
             ["total new activation mtd"],
             ["all activations", "mtd", "total new activation"],
             ["total new activation"],
-            forbidden=["projected", "mom", "yoy"]
+            forbidden=["projected", "proj", "mom", "yoy", "delta"]
         )))
         record["kpis"]["activations_renewals"] = int(clean_num(get_val(
+            ["total renwals"],
             ["renuals"],
             ["renewals"],
             ["all activations", "mtd", "renuals"],
             forbidden=["mom", "yoy", "smb", "new"]
         )))
         record["kpis"]["activations_migrations"] = int(clean_num(get_val(
+            ["total migrations"],
             ["migrations"],
             ["all activations", "mtd", "migrations"],
-            forbidden=["mom", "yoy"]
+            forbidden=["mom", "yoy", "smb"]
         )))
         # Requirement: Total Activations is Total New Activations + Migrations
         record["kpis"]["activations_total"] = record["kpis"]["activations_new"] + record["kpis"]["activations_migrations"]
@@ -300,29 +306,33 @@ def parse_monthly_sheet(ws, sheet_name):
         # CPO Hardware
         record["kpis"]["cpo_units_actual"] = int(clean_num(get_val(
             ["all cpo units mtd"],
+            ["cpo vol mtd"],
             ["cpo", "mtd", "all cpo units"],
             ["all cpo units"],
-            forbidden=["projected", "mom", "yoy"]
+            forbidden=["projected", "proj", "mom", "yoy", "delta", "attach", "repair"]
         )))
         record["kpis"]["cpo_units_projected"] = int(clean_num(get_val(
+            ["proj all cpo vol"],
             ["projected all cpo units"],
             ["cpo", "projected all cpo units"]
         )))
         record["kpis"]["cpo_revenue_actual"] = clean_num(get_val(
             ["all cpo rev mtd"],
+            ["cpo rev mtd"],
             ["cpo", "mtd", "all cpo rev"],
             ["all cpo rev"],
-            forbidden=["projected", "mom", "yoy"]
+            forbidden=["projected", "proj", "mom", "yoy", "delta"]
         ))
         record["kpis"]["cpo_attach_activations_count"] = int(clean_num(get_val(
             ["# of activations attached to cpo sales mtd"],
             ["cpo", "mtd", "# of activations attached to c"],
-            forbidden=["projected", "mom", "yoy"]
+            forbidden=["projected", "proj", "mom", "yoy"]
         )))
         record["kpis"]["cpo_attach_activations_pct"] = clean_num(get_val(
+            ["cpo ar%"],
             ["% of activation attach to cpo mtd"],
             ["cpo", "mtd", "% of activation attach to cpo"],
-            forbidden=["projected", "mom", "yoy"]
+            forbidden=["projected", "proj", "mom", "yoy", "delta"]
         ))
         record["kpis"]["cpo_avg_sale"] = clean_num(get_val(
             ["avg cpo sale"],
@@ -330,76 +340,89 @@ def parse_monthly_sheet(ws, sheet_name):
         ))
         record["kpis"]["trade_in_units"] = int(clean_num(get_val(
             ["cpo trade-ins mtd"],
+            ["trd-ins mtd"],
             ["trade-ins", "cpo trade-ins mtd"],
-            forbidden=["projected", "mom", "yoy"]
+            forbidden=["projected", "proj", "mom", "yoy", "delta"]
         )))
 
         # Technical Services & Repairs
         record["kpis"]["repairs_oow_volume"] = int(clean_num(get_val(
+            ["wi repairs"],
             ["total oow repairs"],
             ["oow repair", "total oow repairs"],
-            forbidden=["projected", "mom", "yoy"]
+            forbidden=["projected", "proj", "mom", "yoy", "delta", "day", "ar%"]
         )))
         record["kpis"]["repairs_oow_revenue"] = clean_num(get_val(
             ["total oow revenue"],
+            ["oow revenue"],
             ["oow repair", "total oow revenue"],
-            forbidden=["projected", "mom", "yoy"]
+            forbidden=["projected", "proj", "mom", "yoy", "delta"]
         ))
         record["kpis"]["repairs_oow_daily_avg"] = clean_num(get_val(
+            ["wi repair/day"],
             ["oow repair/day"],
             ["oow repair", "oow repair/day"]
         ))
         record["kpis"]["repair_attach_activations_count"] = int(clean_num(get_val(
             ["# of activations attached to oow repair sales mtd"],
             ["# of activations attached to oow repair"],
-            forbidden=["projected", "mom", "yoy"]
+            forbidden=["projected", "proj", "mom", "yoy"]
         )))
         record["kpis"]["repair_attach_activations_pct"] = clean_num(get_val(
+            ["wi repair ar%"],
             ["% of activation attach to oow repair mtd"],
             ["% of activation attach to oow repair"],
-            forbidden=["projected", "mom", "yoy"]
+            forbidden=["projected", "proj", "mom", "yoy"]
         ))
         record["kpis"]["repairs_insurance_volume"] = int(clean_num(get_val(
             ["total insurance repairs mtd"],
+            ["part/ins vol"],
             ["total insurance repairs"],
             ["insurance repair", "total insurance repairs"],
-            forbidden=["projected", "mom", "yoy"]
+            forbidden=["projected", "proj", "mom", "yoy", "delta"]
         )))
         record["kpis"]["repairs_insurance_revenue"] = clean_num(get_val(
             ["total insurance rev mtd"],
+            ["part/ins rev"],
             ["total insurance rev"],
             ["insurance repair", "total insurance rev"],
-            forbidden=["projected", "mom", "yoy"]
+            forbidden=["projected", "proj", "mom", "yoy", "delta"]
         ))
 
         # Retail & Accessories
         record["kpis"]["accessories_volume"] = int(clean_num(get_val(
             ["total # accessory volume"],
+            ["acc vol mtd"],
             ["total accessory volume"],
-            forbidden=["projected", "mom", "yoy"]
+            forbidden=["projected", "proj", "mom", "yoy", "delta"]
         )))
         record["kpis"]["accessories_revenue"] = clean_num(get_val(
             ["total accessory revenue mtd"],
+            ["acc rev mtd"],
             ["total accessory revenue"],
-            forbidden=["projected", "mom", "yoy"]
+            forbidden=["projected", "proj", "mom", "yoy", "delta"]
         ))
         record["kpis"]["accessory_attach_oow_repair_pct"] = clean_num(get_val(
             ["accessory attach % on oow repair"],
-            forbidden=["projected", "mom", "yoy"]
+            forbidden=["projected", "proj", "mom", "yoy"]
         ))
         record["kpis"]["protection_bundles_volume"] = int(clean_num(get_val(
             ["protection bundle mtd"],
-            forbidden=["projected", "mom", "yoy"]
+            ["pro bundle mtd"],
+            ["prot bundle mtd"],
+            forbidden=["projected", "proj", "mom", "yoy", "delta"]
         )))
 
         # Traffic & Funnel
         record["kpis"]["foot_traffic_total"] = int(clean_num(get_val(
             ["total traffic mtd"],
-            forbidden=["projected", "mom", "yoy"]
+            ["traffic mtd"],
+            ["traffic vol"],
+            forbidden=["projected", "proj", "mom", "yoy", "delta", "avg", "%"]
         )))
         record["kpis"]["foot_traffic_daily_avg"] = clean_num(get_val(
             ["avg daily traffic"],
-            forbidden=["projected", "mom", "yoy"]
+            forbidden=["projected", "proj", "mom", "yoy"]
         ))
         record["kpis"]["foot_traffic_7day_ma"] = clean_num(get_val(
             ["traffic 7day ma"]
@@ -624,10 +647,18 @@ def main():
                     tot_sales = item["activations_total"] + item["cpo_units_actual"] + item["repairs_oow_volume"]
                     item["conversion_rate_pct"] = round((tot_sales / w_traffic_sum) * 100.0, 2)
 
+            # If sheet is Jan 26 and foot_traffic_total is 0, preserve previously backfilled Jan 26 traffic
+            if s_name.strip() == "Jan 26" and item.get("foot_traffic_total", 0) == 0:
+                item.pop("foot_traffic_total", None)
+                item.pop("conversion_rate_pct", None)
+                item.pop("foot_traffic_daily_avg", None)
+
             kpi_payload.append(item)
         
         if kpi_payload:
-            supabase.table("monthly_kpis").upsert(kpi_payload, on_conflict="location_id,period_id").execute()
+            for i in range(0, len(kpi_payload), 50):
+                batch = kpi_payload[i:i+50]
+                supabase.table("monthly_kpis").upsert(batch, on_conflict="location_id,period_id").execute()
             print(f"Upserted {len(kpi_payload)} rows into monthly_kpis for {s_name}.")
 
     # 3. Upsert weekly KPIs (deduplicated by composite key)

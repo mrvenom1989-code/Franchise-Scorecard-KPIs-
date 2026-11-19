@@ -303,3 +303,43 @@ Server runs at `http://127.0.0.1:5001`.
    * Foot Traffic matched 100% against corporate MTD actuals.
    * Total Activations strictly followed the codified `Total = New + Migrations` rule, correctly reconciling corporate formula discrepancies.
 
+---
+
+## 12. Ingestion of November 2026 Scorecard & October 2026 Finalization (November 20, 2026)
+
+1. **Ingested Workbook**:
+   * `Franchise Scorecard - Nov 26 EOD 11-15-26.xlsx`
+   * Extracted 588 store records across 15 monthly sheets.
+
+2. **Key Sheets Ingested**:
+   * `Nov 26 MTD` (2026-11-01 to 2026-11-15): 89 stores, corporate totals $1,851,298.00 Gross Revenue, 8,547 Sales, 69,868 Traffic.
+   * `Oct 26` (2026-10-01 to 2026-10-31, Full Month Finalized): 78 stores, corporate totals $3,491,877.00 Gross Revenue, 15,997 Sales, 133,612 Traffic. Replaces interim snapshot `Oct 26 MTD`.
+
+3. **Auto-Provisioning of 9 New Store Locations**:
+   * Expanded active store directory from 85 to **94 locations**:
+     - #110 Bayshore
+     - #227 Galaries des Sources
+     - #201 Les Prom Gatineau
+     - #213 Les Rivieres
+     - #158 Markville Mall
+     - #140 Oshawa Centre
+     - #155 Pickering Town Centre
+     - #132 Rideau Centre
+     - #106 Yonge & Eglinton
+
+4. **ETL Parser Enhancements (`ingest_scorecard.py`)**:
+   * **Shortened Column Headers**: Added regex pattern support for corporate abbreviations introduced in November:
+     - `Total GrRev MTD`, `Sales Vol`, `Traffic Vol`, `New Act MTD`, `CPO Vol MTD`, `WI Repairs`, `Part/Ins Vol`, `Part/Ins Rev`, `Acc Vol MTD`, `Acc Rev MTD`, `Pro Bundle MTD`, `Trd-ins MTD`.
+   * **Dynamic Multi-Row Date Discovery**: Upgraded date scanning to check rows 1–5 to reliably capture cutoff dates (e.g., Nov 15).
+   * **Jan 26 Historical Protection**: Guarded backfilled January 2026 foot traffic (30,486 visits) so standard zero-traffic parsing does not overwrite validated historical figures.
+   * **Batch Upserting**: Implemented 50-record batch chunking to avoid HTTP payload limits when syncing with Supabase.
+
+5. **Interim Snapshot Pruning (`Oct 26 MTD`)**:
+   * Updated `routes/dashboard.py` and `routes/api.py` to prune `Oct 26 MTD` (the 25-day interim) from `periods_asc` and multi-month range aggregations now that full month `Oct 26` is available.
+
+6. **Spot-Check Validation Audit**:
+   * Verified store-level and network-level metrics across `Nov 26 MTD` and `Oct 26` against raw Excel cells:
+     - 100% exact match across Gross Revenue, Sales Volume, Foot Traffic, Activations (New + Migrations), CPO Units/Revenue, Repairs, and Accessories.
+     - `activations_total == activations_new + activations_migrations` holds 100% true across all stores.
+
+
