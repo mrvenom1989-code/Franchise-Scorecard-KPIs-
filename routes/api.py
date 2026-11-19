@@ -594,11 +594,17 @@ def get_monthly_trend():
                 item["py_repairs_revenue"] = py_match["repairs_total_revenue"]
                 item["py_traffic"] = py_match["foot_traffic_total"]
                 item["py_conversion_rate_pct"] = py_match["conversion_rate_pct"]
+                item["py_accessories_revenue"] = py_match["accessories_revenue"]
+                item["py_accessories_volume"] = py_match["accessories_volume"]
+                item["py_protection_bundles"] = py_match["protection_bundles_volume"]
                 item["yoy_growth_revenue_pct"] = calc_delta(item["gross_revenue_actual"], py_match["gross_revenue_actual"])["pct"]
                 item["yoy_growth_activations_pct"] = calc_delta(item["activations_total"], py_match["activations_total"])["pct"]
                 item["yoy_growth_cpo_pct"] = calc_delta(item["cpo_units_actual"], py_match["cpo_units_actual"])["pct"]
                 item["yoy_growth_repairs_pct"] = calc_delta(item["repairs_total_volume"], py_match["repairs_total_volume"])["pct"]
                 item["yoy_growth_traffic_pct"] = calc_delta(item["foot_traffic_total"], py_match["foot_traffic_total"])["pct"]
+                item["yoy_growth_accessories_rev_pct"] = calc_delta(item["accessories_revenue"], py_match["accessories_revenue"])["pct"]
+                item["yoy_growth_accessories_vol_pct"] = calc_delta(item["accessories_volume"], py_match["accessories_volume"])["pct"]
+                item["yoy_growth_bundles_pct"] = calc_delta(item["protection_bundles_volume"], py_match["protection_bundles_volume"])["pct"]
             else:
                 item["py_label"] = None
                 item["py_revenue"] = None
@@ -609,11 +615,17 @@ def get_monthly_trend():
                 item["py_repairs_revenue"] = None
                 item["py_traffic"] = None
                 item["py_conversion_rate_pct"] = None
+                item["py_accessories_revenue"] = None
+                item["py_accessories_volume"] = None
+                item["py_protection_bundles"] = None
                 item["yoy_growth_revenue_pct"] = None
                 item["yoy_growth_activations_pct"] = None
                 item["yoy_growth_cpo_pct"] = None
                 item["yoy_growth_repairs_pct"] = None
                 item["yoy_growth_traffic_pct"] = None
+                item["yoy_growth_accessories_rev_pct"] = None
+                item["yoy_growth_accessories_vol_pct"] = None
+                item["yoy_growth_bundles_pct"] = None
 
         # Build 12-Month Calendar Comparison (2025 vs 2026 by Month)
         month_names = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
@@ -632,7 +644,10 @@ def get_monthly_trend():
                     "cpo_units": p25["cpo_units_actual"],
                     "repairs_volume": p25["repairs_total_volume"],
                     "traffic": p25["foot_traffic_total"],
-                    "conversion_rate_pct": p25["conversion_rate_pct"]
+                    "conversion_rate_pct": p25["conversion_rate_pct"],
+                    "accessories_revenue": p25["accessories_revenue"],
+                    "accessories_volume": p25["accessories_volume"],
+                    "protection_bundles": p25["protection_bundles_volume"]
                 } if p25 else None,
                 "p2026": {
                     "label": p26["label"],
@@ -641,7 +656,10 @@ def get_monthly_trend():
                     "cpo_units": p26["cpo_units_actual"],
                     "repairs_volume": p26["repairs_total_volume"],
                     "traffic": p26["foot_traffic_total"],
-                    "conversion_rate_pct": p26["conversion_rate_pct"]
+                    "conversion_rate_pct": p26["conversion_rate_pct"],
+                    "accessories_revenue": p26["accessories_revenue"],
+                    "accessories_volume": p26["accessories_volume"],
+                    "protection_bundles": p26["protection_bundles_volume"]
                 } if p26 else None,
                 "growth": {
                     "revenue_pct": calc_delta(p26["gross_revenue_actual"], p25["gross_revenue_actual"])["pct"] if (p25 and p26) else None,
@@ -649,6 +667,9 @@ def get_monthly_trend():
                     "cpo_pct": calc_delta(p26["cpo_units_actual"], p25["cpo_units_actual"])["pct"] if (p25 and p26) else None,
                     "repairs_pct": calc_delta(p26["repairs_total_volume"], p25["repairs_total_volume"])["pct"] if (p25 and p26) else None,
                     "traffic_pct": calc_delta(p26["foot_traffic_total"], p25["foot_traffic_total"])["pct"] if (p25 and p26) else None,
+                    "accessories_revenue_pct": calc_delta(p26["accessories_revenue"], p25["accessories_revenue"])["pct"] if (p25 and p26) else None,
+                    "accessories_volume_pct": calc_delta(p26["accessories_volume"], p25["accessories_volume"])["pct"] if (p25 and p26) else None,
+                    "protection_bundles_pct": calc_delta(p26["protection_bundles_volume"], p25["protection_bundles_volume"])["pct"] if (p25 and p26) else None,
                 }
             })
 
@@ -667,7 +688,10 @@ def get_monthly_trend():
                 "repairs_volume": calc_delta(curr["repairs_total_volume"], prev["repairs_total_volume"]),
                 "repairs_revenue": calc_delta(curr["repairs_total_revenue"], prev["repairs_total_revenue"]),
                 "traffic": calc_delta(curr["foot_traffic_total"], prev["foot_traffic_total"]),
-                "conversion_rate": calc_delta(curr["conversion_rate_pct"], prev["conversion_rate_pct"])
+                "conversion_rate": calc_delta(curr["conversion_rate_pct"], prev["conversion_rate_pct"]),
+                "accessories_revenue": calc_delta(curr["accessories_revenue"], prev["accessories_revenue"]),
+                "accessories_volume": calc_delta(curr["accessories_volume"], prev["accessories_volume"]),
+                "protection_bundles": calc_delta(curr["protection_bundles_volume"], prev["protection_bundles_volume"])
             }
 
         # YoY (Year-on-Year) deltas matching same month 1 year ago
@@ -698,7 +722,10 @@ def get_monthly_trend():
                     "repairs_volume": calc_delta(curr["repairs_total_volume"], prior_year_match["repairs_total_volume"]),
                     "repairs_revenue": calc_delta(curr["repairs_total_revenue"], prior_year_match["repairs_total_revenue"]),
                     "traffic": calc_delta(curr["foot_traffic_total"], prior_year_match["foot_traffic_total"]),
-                    "conversion_rate": calc_delta(curr["conversion_rate_pct"], prior_year_match["conversion_rate_pct"])
+                    "conversion_rate": calc_delta(curr["conversion_rate_pct"], prior_year_match["conversion_rate_pct"]),
+                    "accessories_revenue": calc_delta(curr["accessories_revenue"], prior_year_match["accessories_revenue"]),
+                    "accessories_volume": calc_delta(curr["accessories_volume"], prior_year_match["accessories_volume"]),
+                    "protection_bundles": calc_delta(curr["protection_bundles_volume"], prior_year_match["protection_bundles_volume"])
                 }
 
         # Growth Matrix for Executive Pulse Table
@@ -715,6 +742,9 @@ def get_monthly_trend():
                 ("Total Repairs", "repairs", "number", curr["repairs_total_volume"], prev["repairs_total_volume"] if prev else None, py["repairs_total_volume"] if py else None),
                 ("Foot Traffic", "traffic", "number", curr["foot_traffic_total"], prev["foot_traffic_total"] if prev else None, py["foot_traffic_total"] if py else None),
                 ("Conversion Rate", "conversion", "percent", curr["conversion_rate_pct"], prev["conversion_rate_pct"] if prev else None, py["conversion_rate_pct"] if py else None),
+                ("Accessory Revenue", "accessories_revenue", "currency", curr["accessories_revenue"], prev["accessories_revenue"] if prev else None, py["accessories_revenue"] if py else None),
+                ("Accessory Units", "accessories_volume", "number", curr["accessories_volume"], prev["accessories_volume"] if prev else None, py["accessories_volume"] if py else None),
+                ("Protection Bundles", "protection_bundles", "number", curr["protection_bundles_volume"], prev["protection_bundles_volume"] if prev else None, py["protection_bundles_volume"] if py else None),
             ]
 
             for name, key, fmt, c_v, p_v, py_v in metrics_def:

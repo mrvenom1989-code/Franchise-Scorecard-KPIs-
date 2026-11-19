@@ -198,6 +198,9 @@ def run_yoy_spot_check(source_sheet, target_period_label, sample_store_numbers):
             xl_cpo_r = clean_num(matched_xl_row[110])
             xl_rep_oow_u = clean_num(matched_xl_row[148])
             xl_rep_ins_u = clean_num(matched_xl_row[162])
+            xl_acc_u = clean_num(matched_xl_row[128])
+            xl_acc_r = clean_num(matched_xl_row[129])
+            xl_bundle = clean_num(matched_xl_row[136])
         else: # Oct 26
             xl_rev = clean_num(matched_xl_row[22])
             xl_sales = clean_num(matched_xl_row[21])
@@ -206,6 +209,9 @@ def run_yoy_spot_check(source_sheet, target_period_label, sample_store_numbers):
             xl_cpo_r = clean_num(matched_xl_row[74])
             xl_rep_oow_u = clean_num(matched_xl_row[108])
             xl_rep_ins_u = clean_num(matched_xl_row[119])
+            xl_acc_u = clean_num(matched_xl_row[92])
+            xl_acc_r = clean_num(matched_xl_row[93])
+            xl_bundle = clean_num(matched_xl_row[99])
 
         tests = [
             ("YoY Revenue", xl_rev, float(db_row.get("gross_revenue_actual") or 0), True),
@@ -215,6 +221,9 @@ def run_yoy_spot_check(source_sheet, target_period_label, sample_store_numbers):
             ("YoY CPO Rev", xl_cpo_r, float(db_row.get("cpo_revenue_actual") or 0), True),
             ("YoY OOW Repairs", xl_rep_oow_u, float(db_row.get("repairs_oow_volume") or 0), False),
             ("YoY Ins Repairs", xl_rep_ins_u, float(db_row.get("repairs_insurance_volume") or 0), False),
+            ("YoY Acc Units", xl_acc_u, float(db_row.get("accessories_volume") or 0), False),
+            ("YoY Acc Rev", xl_acc_r, float(db_row.get("accessories_revenue") or 0), True),
+            ("YoY Protection Bundles", xl_bundle, float(db_row.get("protection_bundles_volume") or 0), False),
         ]
 
         store_passes = 0

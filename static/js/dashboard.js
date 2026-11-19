@@ -16,7 +16,9 @@ let chartModes = {
   activations: "timeline",
   cpo: "timeline",
   repairs: "timeline",
-  traffic: "timeline"
+  traffic: "timeline",
+  accessories: "timeline",
+  bundles: "timeline"
 };
 let monthlyTrendsData = null;
 
@@ -832,6 +834,8 @@ function setChartViewMode(metric, mode, btn) {
   else if (metric === "cpo") renderMonthlyCPOChart(trend, yoyByMonth, mode);
   else if (metric === "repairs") renderMonthlyRepairsChart(trend, yoyByMonth, mode);
   else if (metric === "traffic") renderMonthlyTrafficChart(trend, yoyByMonth, mode);
+  else if (metric === "accessories") renderMonthlyAccessoriesChart(trend, yoyByMonth, mode);
+  else if (metric === "bundles") renderMonthlyBundlesChart(trend, yoyByMonth, mode);
 }
 
 // Monthly Trends Fetcher & Visualizer with YoY / MoM Data (Req 3)
@@ -856,6 +860,8 @@ async function loadMonthlyTrends(locParam) {
     renderMonthlyCPOChart(trend, yoyByMonth, chartModes.cpo);
     renderMonthlyRepairsChart(trend, yoyByMonth, chartModes.repairs);
     renderMonthlyTrafficChart(trend, yoyByMonth, chartModes.traffic);
+    renderMonthlyAccessoriesChart(trend, yoyByMonth, chartModes.accessories);
+    renderMonthlyBundlesChart(trend, yoyByMonth, chartModes.bundles);
 
     // 3. Helper to format delta tags
     const applyDelta = (elementId, deltaObj, label) => {
@@ -897,6 +903,11 @@ async function loadMonthlyTrends(locParam) {
 
     applyDelta("badge-traffic-mom", mom.traffic, `MoM (${mom.previous_period || 'Prior Mo'})`);
     applyDelta("badge-traffic-yoy", yoy.traffic, `YoY (${yoy.prior_year_period || 'Last Yr'})`);
+
+    applyDelta("badge-acc-mom", mom.accessories_revenue, `MoM (${mom.previous_period || 'Prior Mo'})`);
+    applyDelta("badge-acc-yoy", yoy.accessories_revenue, `YoY (${yoy.prior_year_period || 'Last Yr'})`);
+    applyDelta("badge-bundles-mom", mom.protection_bundles, `MoM (${mom.previous_period || 'Prior Mo'})`);
+    applyDelta("badge-bundles-yoy", yoy.protection_bundles, `YoY (${yoy.prior_year_period || 'Last Yr'})`);
 
   } catch (err) {
     console.error("Error loading monthly trends:", err);
@@ -2099,3 +2110,399 @@ function exportData() {
     window.location.href = `/api/export-csv?period_id=${periodId}&location_id=${locParam}`;
   }
 }
+
+// Location Selector: Dynamic Sorting by Store Number or Store Name (A-Z)
+function sortStoreCheckboxes(sortBy) {
+  const container = document.getElementById("store-checkboxes-list");
+  if (!container) return;
+  const items = Array.from(container.querySelectorAll(".store-checkbox-item"));
+  
+  items.sort((a, b) => {
+    if (sortBy === "name") {
+      const nameA = (a.dataset.storeName || "").toLowerCase();
+      const nameB = (b.dataset.storeName || "").toLowerCase();
+      return nameA.localeCompare(nameB);
+    } else {
+      const numA = parseInt(a.dataset.storeNum || "0", 10);
+      const numB = parseInt(b.dataset.storeNum || "0", 10);
+      return numA - numB;
+    }
+  });
+
+  items.forEach(el => container.appendChild(el));
+
+  const btnNum = document.getElementById("btn-sort-store-num");
+  const btnName = document.getElementById("btn-sort-store-name");
+  if (btnNum && btnName) {
+    btnNum.classList.toggle("active", sortBy === "number");
+    btnName.classList.toggle("active", sortBy === "name");
+  }
+}
+
+// Tab 5: Monthly Accessories Historical Trend & YoY Overlay
+function renderMonthlyAccessoriesChart(trend, yoyByMonth, mode) {
+  const ctx = document.getElementById("chart-monthly-accessories-trend");
+  if (!ctx) return;
+  if (charts.monthlyAccessories) charts.monthlyAccessories.destroy();
+
+  if (mode === "yoy") {
+    const labels = yoyByMonth.map(m => m.month_name);
+    const data2025 = yoyByMonth.map(m => (m.p2025 ? m.p2025.accessories_revenue : null));
+    const data2026 = yoyByMonth.map(m => (m.p2026 ? m.p2026.accessories_revenue : null));
+
+    charts.monthlyAccessories = new Chart(ctx, {
+      type: "bar",
+      data: {
+        labels: labels,
+        datasets: [
+          {
+            label: "2025 Acc Revenue (Prior Year)",
+            data: data2025,
+            backgroundColor: "rgba(245, 158, 11, 0.35)",
+            borderColor: "#f59e0b",
+            borderWidth: 2,
+            borderRadius: 6
+          },
+          {
+            label: "2026 Acc Revenue (Current Year)",
+            data: data2026,
+            backgroundColor: "rgba(6, 182, 212, 0.75)",
+            borderColor: "#06b6d4",
+            borderWidth: 2,
+            borderRadius: 6
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        layout: { padding: { top: 35, bottom: 5, left: 5, right: 10 } },
+        plugins: {
+          legend: {
+            labels: {
+              color: "#e2e8f0",
+              font: { family: "'Plus Jakarta Sans', sans-serif", weight: "600", size: 12 },
+              usePointStyle: true,
+              boxWidth: 8
+            }
+          },
+          datalabels: {
+            display: true,
+            color: ctx => (ctx.datasetIndex === 0 ? "#fbbf24" : "#22d3ee"),
+            backgroundColor: "rgba(15, 23, 42, 0.95)",
+            borderColor: ctx => (ctx.datasetIndex === 0 ? "#f59e0b" : "#06b6d4"),
+            borderWidth: 1.5,
+            borderRadius: 6,
+            padding: { top: 3, bottom: 3, left: 6, right: 6 },
+            font: { family: "'Plus Jakarta Sans', sans-serif", weight: "800", size: 11 },
+            align: "top",
+            anchor: "end",
+            offset: 5,
+            formatter: v => (v > 0 ? formatCompactCurrency(v) : "")
+          },
+          tooltip: {
+            callbacks: {
+              label: ctx => `${ctx.dataset.label}: ${formatCurrency(ctx.raw || 0)}`,
+              afterBody: items => {
+                const idx = items[0].dataIndex;
+                const m = yoyByMonth[idx];
+                if (m && m.growth && m.growth.accessories_revenue_pct !== null) {
+                  const s = m.growth.accessories_revenue_pct > 0 ? "+" : "";
+                  return `YoY Growth: ${s}${m.growth.accessories_revenue_pct}%`;
+                }
+                return "";
+              }
+            }
+          }
+        },
+        scales: {
+          y: {
+            grid: { color: "rgba(255, 255, 255, 0.08)" },
+            ticks: {
+              color: "#06b6d4",
+              font: { family: "'Plus Jakarta Sans', sans-serif", weight: "600", size: 11 },
+              callback: v => formatCompactCurrency(v)
+            }
+          },
+          x: {
+            grid: { display: false },
+            ticks: {
+              color: "#e2e8f0",
+              font: { family: "'Plus Jakarta Sans', sans-serif", weight: "600", size: 11 }
+            }
+          }
+        }
+      }
+    });
+  } else {
+    const labels = trend.map(t => t.label);
+    const revenues = trend.map(t => t.accessories_revenue);
+    const volumes = trend.map(t => t.accessories_volume);
+
+    charts.monthlyAccessories = new Chart(ctx, {
+      type: "bar",
+      data: {
+        labels: labels,
+        datasets: [
+          {
+            label: "Accessory Revenue ($)",
+            data: revenues,
+            backgroundColor: "rgba(6, 182, 212, 0.65)",
+            borderColor: "#06b6d4",
+            borderWidth: 1.5,
+            borderRadius: 6,
+            yAxisID: "y",
+            order: 2
+          },
+          {
+            label: "Units Sold",
+            data: volumes,
+            type: "line",
+            borderColor: "#10b981",
+            backgroundColor: "transparent",
+            borderWidth: 3,
+            pointBackgroundColor: "#ffffff",
+            pointBorderColor: "#10b981",
+            pointRadius: 4,
+            pointHoverRadius: 6,
+            yAxisID: "y1",
+            order: 1
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        layout: { padding: { top: 35, bottom: 5, left: 5, right: 10 } },
+        plugins: {
+          legend: {
+            labels: {
+              color: "#e2e8f0",
+              font: { family: "'Plus Jakarta Sans', sans-serif", weight: "600", size: 12 },
+              usePointStyle: true,
+              boxWidth: 8
+            }
+          },
+          datalabels: {
+            display: ctx => ctx.datasetIndex === 0,
+            color: "#22d3ee",
+            backgroundColor: "rgba(15, 23, 42, 0.95)",
+            borderColor: "#06b6d4",
+            borderWidth: 1.5,
+            borderRadius: 6,
+            padding: { top: 3, bottom: 3, left: 6, right: 6 },
+            font: { family: "'Plus Jakarta Sans', sans-serif", weight: "800", size: 11 },
+            align: "top",
+            anchor: "end",
+            offset: 5,
+            formatter: v => (v > 0 ? formatCompactCurrency(v) : "")
+          },
+          tooltip: {
+            callbacks: {
+              label: ctx => {
+                if (ctx.datasetIndex === 0) return `Revenue: ${formatCurrency(ctx.raw || 0)}`;
+                return `Units: ${formatNumber(ctx.raw || 0)}`;
+              }
+            }
+          }
+        },
+        scales: {
+          y: {
+            grid: { color: "rgba(255, 255, 255, 0.08)" },
+            ticks: {
+              color: "#06b6d4",
+              font: { family: "'Plus Jakarta Sans', sans-serif", weight: "600", size: 11 },
+              callback: v => formatCompactCurrency(v)
+            }
+          },
+          y1: {
+            position: "right",
+            grid: { display: false },
+            ticks: {
+              color: "#10b981",
+              font: { family: "'Plus Jakarta Sans', sans-serif", weight: "600", size: 11 },
+              callback: v => formatNumber(v)
+            }
+          },
+          x: {
+            grid: { display: false },
+            ticks: {
+              color: "#e2e8f0",
+              font: { family: "'Plus Jakarta Sans', sans-serif", weight: "600", size: 11 }
+            }
+          }
+        }
+      }
+    });
+  }
+}
+
+// Tab 5: Protection Bundles Historical Trend & YoY Overlay
+function renderMonthlyBundlesChart(trend, yoyByMonth, mode) {
+  const ctx = document.getElementById("chart-monthly-bundles-trend");
+  if (!ctx) return;
+  if (charts.monthlyBundles) charts.monthlyBundles.destroy();
+
+  if (mode === "yoy") {
+    const labels = yoyByMonth.map(m => m.month_name);
+    const data2025 = yoyByMonth.map(m => (m.p2025 ? m.p2025.protection_bundles : null));
+    const data2026 = yoyByMonth.map(m => (m.p2026 ? m.p2026.protection_bundles : null));
+
+    charts.monthlyBundles = new Chart(ctx, {
+      type: "bar",
+      data: {
+        labels: labels,
+        datasets: [
+          {
+            label: "2025 Protection Bundles (Prior Year)",
+            data: data2025,
+            backgroundColor: "rgba(245, 158, 11, 0.35)",
+            borderColor: "#f59e0b",
+            borderWidth: 2,
+            borderRadius: 6
+          },
+          {
+            label: "2026 Protection Bundles (Current Year)",
+            data: data2026,
+            backgroundColor: "rgba(168, 85, 247, 0.75)",
+            borderColor: "#c084fc",
+            borderWidth: 2,
+            borderRadius: 6
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        layout: { padding: { top: 35, bottom: 5, left: 5, right: 10 } },
+        plugins: {
+          legend: {
+            labels: {
+              color: "#e2e8f0",
+              font: { family: "'Plus Jakarta Sans', sans-serif", weight: "600", size: 12 },
+              usePointStyle: true,
+              boxWidth: 8
+            }
+          },
+          datalabels: {
+            display: true,
+            color: ctx => (ctx.datasetIndex === 0 ? "#fbbf24" : "#c084fc"),
+            backgroundColor: "rgba(15, 23, 42, 0.95)",
+            borderColor: ctx => (ctx.datasetIndex === 0 ? "#f59e0b" : "#a855f7"),
+            borderWidth: 1.5,
+            borderRadius: 6,
+            padding: { top: 3, bottom: 3, left: 6, right: 6 },
+            font: { family: "'Plus Jakarta Sans', sans-serif", weight: "800", size: 11 },
+            align: "top",
+            anchor: "end",
+            offset: 5,
+            formatter: v => (v > 0 ? v : "")
+          },
+          tooltip: {
+            callbacks: {
+              label: ctx => `${ctx.dataset.label}: ${formatNumber(ctx.raw || 0)} plans`,
+              afterBody: items => {
+                const idx = items[0].dataIndex;
+                const m = yoyByMonth[idx];
+                if (m && m.growth && m.growth.protection_bundles_pct !== null) {
+                  const s = m.growth.protection_bundles_pct > 0 ? "+" : "";
+                  return `YoY Growth: ${s}${m.growth.protection_bundles_pct}%`;
+                }
+                return "";
+              }
+            }
+          }
+        },
+        scales: {
+          y: {
+            grid: { color: "rgba(255, 255, 255, 0.08)" },
+            ticks: {
+              color: "#c084fc",
+              font: { family: "'Plus Jakarta Sans', sans-serif", weight: "600", size: 11 },
+              callback: v => formatNumber(v)
+            }
+          },
+          x: {
+            grid: { display: false },
+            ticks: {
+              color: "#e2e8f0",
+              font: { family: "'Plus Jakarta Sans', sans-serif", weight: "600", size: 11 }
+            }
+          }
+        }
+      }
+    });
+  } else {
+    const labels = trend.map(t => t.label);
+    const bundles = trend.map(t => t.protection_bundles_volume);
+
+    charts.monthlyBundles = new Chart(ctx, {
+      type: "bar",
+      data: {
+        labels: labels,
+        datasets: [
+          {
+            label: "Protection Bundles Sold",
+            data: bundles,
+            backgroundColor: "rgba(168, 85, 247, 0.65)",
+            borderColor: "#a855f7",
+            borderWidth: 1.5,
+            borderRadius: 6
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        layout: { padding: { top: 35, bottom: 5, left: 5, right: 10 } },
+        plugins: {
+          legend: {
+            labels: {
+              color: "#e2e8f0",
+              font: { family: "'Plus Jakarta Sans', sans-serif", weight: "600", size: 12 },
+              usePointStyle: true,
+              boxWidth: 8
+            }
+          },
+          datalabels: {
+            display: true,
+            color: "#c084fc",
+            backgroundColor: "rgba(15, 23, 42, 0.95)",
+            borderColor: "#a855f7",
+            borderWidth: 1.5,
+            borderRadius: 6,
+            padding: { top: 3, bottom: 3, left: 6, right: 6 },
+            font: { family: "'Plus Jakarta Sans', sans-serif", weight: "800", size: 11 },
+            align: "top",
+            anchor: "end",
+            offset: 5,
+            formatter: v => (v > 0 ? v : "")
+          },
+          tooltip: {
+            callbacks: {
+              label: ctx => `Plans Sold: ${formatNumber(ctx.raw || 0)}`
+            }
+          }
+        },
+        scales: {
+          y: {
+            grid: { color: "rgba(255, 255, 255, 0.08)" },
+            ticks: {
+              color: "#c084fc",
+              font: { family: "'Plus Jakarta Sans', sans-serif", weight: "600", size: 11 },
+              callback: v => formatNumber(v)
+            }
+          },
+          x: {
+            grid: { display: false },
+            ticks: {
+              color: "#e2e8f0",
+              font: { family: "'Plus Jakarta Sans', sans-serif", weight: "600", size: 11 }
+            }
+          }
+        }
+      }
+    });
+  }
+}
+

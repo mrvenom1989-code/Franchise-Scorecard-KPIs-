@@ -347,5 +347,27 @@ Server runs at `http://127.0.0.1:5001`.
    * **Resolution**: Built `scripts/ingest_embedded_yoy.py` extracting all 2025 YoY columns across `Sept 26`, `Oct 26`, and `Nov 26 MTD` into `monthly_kpis` (206 total store records).
    * **Result**: Aberdeen Mall now displays **+$35,017 (+208.2%)** YoY Gross Revenue growth, **+1700%** Activations, **+138.9%** CPO, and **-8.6%** Traffic, matching Excel cells exactly.
 
+---
+
+## 13. Location Selector Sorting & Full Accessories & Bundles Historical Timeline (November 20, 2026)
+
+1. **Location Selector Dynamic Sorting (Store # vs Name A–Z)**:
+   * Added interactive toggle pill inside the Store Multiselect dropdown: `[# Store]` and `[Name A–Z]`.
+   * Implemented `sortStoreCheckboxes(sortBy)` in `static/js/dashboard.js`, sorting `.store-checkbox-item` DOM nodes instantly with zero latency or network requests while preserving checkmark states.
+
+2. **Full Historical Ingestion for Accessories & Bundles (2025 & 2026)**:
+   * Built and executed `scripts/backfill_2025_accessories.py`, backfilling **259 store records** across `Jan 2025` through `Aug 2025` from the corporate sheets' YoY accessory and protection bundle columns.
+   * Together with `Sept 2025` through `Nov 26 MTD`, the system now provides a continuous **23-month complete timeline** for Accessory Revenue (\$), Units Sold, and Protection Bundles.
+
+3. **Tab 5 (Accessories & Bundles) Historical Trend Charts**:
+   * Added two dual-mode interactive Chart.js visualizations in Tab 5:
+     - **Monthly Accessories Historical Trend**: Bar chart (Revenue \$) with secondary line axis (Units Sold) in 14-Mo Trend mode, and YoY comparative overlay (2025 vs 2026).
+     - **Protection Bundles Historical Trend**: Bar chart of AppleCare and warranty plan sales volume with YoY comparative overlay.
+   * Added MoM and YoY delta badges (`#badge-acc-mom`, `#badge-acc-yoy`, `#badge-bundles-mom`, `#badge-bundles-yoy`).
+
+4. **Expanded Future Spot-Check Audits**:
+   * `scripts/spot_check_nov_data.py` now asserts 10 metrics for prior-year baselines, strictly checking Accessory Volume, Accessory Revenue, and Protection Bundles alongside Revenue, Sales, Traffic, Activations, CPO, and Repairs.
+
+
 
 

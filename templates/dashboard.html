@@ -27,12 +27,21 @@
               <button type="button" class="btn btn-secondary" style="font-size:0.7rem;padding:2px 8px;" onclick="setAllStoreCheckboxes(false)">Clear</button>
             </div>
           </div>
+
+          <!-- Store Sorting Controls -->
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;padding:4px 8px;background:rgba(255,255,255,0.03);border-radius:var(--radius-sm);border:1px solid var(--border-glass);">
+            <span style="font-size:0.7rem;font-weight:600;color:var(--text-muted);">Sort By:</span>
+            <div style="display:flex;gap:4px;">
+              <button type="button" id="btn-sort-store-num" class="btn btn-secondary active" style="font-size:0.68rem;padding:2px 7px;" onclick="sortStoreCheckboxes('number')"># Store</button>
+              <button type="button" id="btn-sort-store-name" class="btn btn-secondary" style="font-size:0.68rem;padding:2px 7px;" onclick="sortStoreCheckboxes('name')">Name A–Z</button>
+            </div>
+          </div>
           
           <input type="text" id="store-search-box" placeholder="Search stores..." class="select-control" style="width:100%;margin-bottom:8px;padding:6px 10px;font-size:0.8rem;" oninput="filterStoreCheckboxes()">
 
           <div id="store-checkboxes-list" style="max-height:220px;overflow-y:auto;display:flex;flex-direction:column;gap:4px;padding-right:4px;">
             {% for loc in locations %}
-            <label class="store-checkbox-item" data-name="{{ loc.name.lower() }} {{ loc.store_number }}" style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:var(--radius-sm);cursor:pointer;font-size:0.82rem;user-select:none;transition:background 0.15s ease;">
+            <label class="store-checkbox-item" data-name="{{ loc.name.lower() }} {{ loc.store_number }}" data-store-num="{{ loc.store_number }}" data-store-name="{{ loc.name.replace('Mobile Klinik ', '') }}" style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:var(--radius-sm);cursor:pointer;font-size:0.82rem;user-select:none;transition:background 0.15s ease;">
               <input type="checkbox" class="loc-checkbox" value="{{ loc.id }}" data-store-num="{{ loc.store_number }}" data-name="{{ loc.name }}" checked onchange="onLocationSelectionChange()">
               <span style="font-weight:600;color:var(--text-main);">#{{ loc.store_number }}</span>
               <span style="color:var(--text-muted);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ loc.name.replace('Mobile Klinik ', '') }}</span>
@@ -552,6 +561,49 @@
         <div class="kpi-title">Protection Bundles</div>
         <div class="kpi-value" id="kpi-protection-bundles">0</div>
         <div class="kpi-subtext">AppleCare & Warranty Plans</div>
+      </div>
+    </div>
+
+    <!-- Monthly Accessories & Bundles Historical Trend & YoY Overlay -->
+    <div class="charts-grid" style="margin-top: 20px;">
+      <div class="glass-card">
+        <div class="chart-header" style="flex-wrap: wrap; gap: 8px;">
+          <div>
+            <h3 class="chart-title">Monthly Accessories Historical Trend</h3>
+            <span style="font-size: 0.8rem; color: #cbd5e1; font-weight: 500;">Accessory Revenue ($) & Units Sold</span>
+          </div>
+          <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+            <div class="chart-view-switcher" id="switcher-accessories">
+              <button class="chart-view-btn active" onclick="setChartViewMode('accessories', 'timeline', this)">14-Mo Trend</button>
+              <button class="chart-view-btn" onclick="setChartViewMode('accessories', 'yoy', this)">YoY (2025 vs 2026)</button>
+            </div>
+            <span class="delta-tag neutral" id="badge-acc-mom">MoM: --</span>
+            <span class="delta-tag neutral" id="badge-acc-yoy">YoY: --</span>
+          </div>
+        </div>
+        <div style="height: 320px; position: relative;">
+          <canvas id="chart-monthly-accessories-trend"></canvas>
+        </div>
+      </div>
+
+      <div class="glass-card">
+        <div class="chart-header" style="flex-wrap: wrap; gap: 8px;">
+          <div>
+            <h3 class="chart-title">Protection Bundles Historical Trend</h3>
+            <span style="font-size: 0.8rem; color: #cbd5e1; font-weight: 500;">Warranty & Protection Plan Velocity</span>
+          </div>
+          <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+            <div class="chart-view-switcher" id="switcher-bundles">
+              <button class="chart-view-btn active" onclick="setChartViewMode('bundles', 'timeline', this)">14-Mo Trend</button>
+              <button class="chart-view-btn" onclick="setChartViewMode('bundles', 'yoy', this)">YoY (2025 vs 2026)</button>
+            </div>
+            <span class="delta-tag neutral" id="badge-bundles-mom">MoM: --</span>
+            <span class="delta-tag neutral" id="badge-bundles-yoy">YoY: --</span>
+          </div>
+        </div>
+        <div style="height: 320px; position: relative;">
+          <canvas id="chart-monthly-bundles-trend"></canvas>
+        </div>
       </div>
     </div>
   </div>

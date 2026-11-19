@@ -363,6 +363,11 @@ This document records architectural insights, data anomalies, API quirks, and te
 *   **The Problem**: When corporate provides a scorecard workbook with historical tabs, the ancient static tabs from the previous year (e.g. `Nov 25`, `Dec 2025`) often only contain an outdated roster (e.g. 28 stores), omitting stores that opened or converted later. However, the current year's sheets (e.g. `Nov 26 MTD`) contain prior-year baseline numbers for all 89 active stores embedded directly in YoY comparison columns (`YoY Total GroRev`, `YoY Sales Vol`, `Traffic Vol YoY`, `YoY CPO Units`, etc.). Relying only on current-period ingestion left 61 stores without prior-year rows in `monthly_kpis`, causing executive YoY velocity cards to display `-- 0%`.
 *   **The Solution**: Always extract embedded YoY columns from current-year sheets (`Sept 26`, `Oct 26`, `Nov 26 MTD`) and upsert them into `monthly_kpis` under the corresponding prior-year periods (`Sept 2025`, `Oct 2025`, `Nov 25`). Validation spot-checks must test both current actuals AND prior-year YoY baseline rows.
 
+### Dual-Axis Secondary Charts for Merchandise & Attach Velocity
+*   **The Problem**: In retail scorecard operations, merchandise accessories and protection bundles operate on different scales: revenue ranges from thousands of dollars, whereas items sold ranges in dozens or hundreds. Single-axis bar charts compress volume bars to invisibility or flatten revenue scales.
+*   **The Solution**: Use a dual-axis (`y` for currency, `y1` for volume) configuration in Chart.js with bar for revenue and line overlay for unit volume. In YoY overlay mode, switch to grouped side-by-side comparative bars (`2025 Prior Year` vs `2026 Current Year`) with dynamic compact currency badges.
+
+
 
 
 

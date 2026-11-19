@@ -31,6 +31,7 @@ YOY_CONFIGS = [
             "cpo_r": 78,     # YoY CPO Rev
             "acc_u": 93,     # YoY Accessory Volume
             "acc_r": 94,     # YOY Accessory Revenue
+            "bundle": 100,   # YoY Protection Bundle
             "rep_oow_u": 112,# YoY OOW # Repairs
             "rep_oow_r": 113,# YoY OOW Revenue
             "rep_ins_u": 124,# YoY Insurance Volume
@@ -54,6 +55,7 @@ YOY_CONFIGS = [
             "cpo_r": 74,     # YoY CPO Rev
             "acc_u": 92,     # YoY Accessory Volume
             "acc_r": 93,     # YOY Accessory Revenue
+            "bundle": 99,    # YoY Protection Bundle
             "rep_oow_u": 108,# YoY WI # Repairs
             "rep_oow_r": 109,# YoY WI Revenue
             "rep_ins_u": 119,# YoY Insurance Volume
@@ -77,6 +79,7 @@ YOY_CONFIGS = [
             "cpo_r": 110,    # YoY CPO Rev
             "acc_u": 128,    # YoY Acc Vol
             "acc_r": 129,    # YOY Acc Rev
+            "bundle": 136,   # YoY Protection Bundle
             "rep_oow_u": 148,# YoY WI # Repairs
             "rep_oow_r": 149,# YoY WI Revenue
             "rep_ins_u": 162,# Part/Ins Vol YoY
@@ -170,6 +173,7 @@ def run_embedded_yoy_ingestion():
             cpo_r = get_v("cpo_r", 0.0)
             acc_u = int(get_v("acc_u", 0))
             acc_r = get_v("acc_r", 0.0)
+            bundle = int(get_v("bundle", 0))
             oow_u = int(get_v("rep_oow_u", 0))
             oow_r = get_v("rep_oow_r", 0.0)
             ins_u = int(get_v("rep_ins_u", 0))
@@ -203,7 +207,7 @@ def run_embedded_yoy_ingestion():
                 "repairs_insurance_revenue": round(ins_r, 2),
                 "accessories_volume": acc_u,
                 "accessories_revenue": round(acc_r, 2),
-                "protection_bundles_volume": 0,
+                "protection_bundles_volume": bundle,
                 "foot_traffic_total": traffic,
                 "conversion_rate_pct": round((sales / traffic * 100), 2) if traffic > 0 else 0.0
             }
@@ -232,3 +236,4 @@ def run_embedded_yoy_ingestion():
 
 if __name__ == "__main__":
     run_embedded_yoy_ingestion()
+
