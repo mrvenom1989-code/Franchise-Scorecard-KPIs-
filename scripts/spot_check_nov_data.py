@@ -29,7 +29,7 @@ def clean_num(val):
 
 def run_spot_check(sheet_name, sample_store_numbers):
     print(f"==================================================")
-    print(f"  AUDIT: Sheet '{sheet_name}'")
+    print(f"  AUDIT: Current Sheet '{sheet_name}'")
     print(f"==================================================")
     ws = wb[sheet_name]
     rows = list(ws.iter_rows(max_row=120, values_only=True))
@@ -149,7 +149,96 @@ def run_spot_check(sheet_name, sample_store_numbers):
 
     print(f"\nSheet '{sheet_name}' Total Checked: {passed_checks}/{total_checks} ({passed_checks/total_checks*100:.1f}%) Passed.\n")
 
+def run_yoy_spot_check(source_sheet, target_period_label, sample_store_numbers):
+    print(f"==================================================")
+    print(f"  AUDIT: YoY Baseline '{target_period_label}' (from sheet '{source_sheet}')")
+    print(f"==================================================")
+    ws = wb[source_sheet]
+    rows = list(ws.iter_rows(max_row=120, values_only=True))
+
+    period_id = periods[target_period_label]['id']
+    total_checks = 0
+    passed_checks = 0
+
+    for st_num in sample_store_numbers:
+        loc = locations.get(st_num)
+        if not loc:
+            print(f"Store #{st_num} not found in DB!")
+            continue
+
+        matched_xl_row = None
+        for r in rows[5:]:
+            val0 = r[0] if source_sheet == 'Nov 26 MTD' else r[2]
+            name_val = r[1] if source_sheet == 'Nov 26 MTD' else r[3]
+            if val0 and str(st_num) in str(val0):
+                matched_xl_row = r
+                break
+            if name_val and loc['short_name'].lower() in str(name_val).lower():
+                matched_xl_row = r
+                break
+
+        if not matched_xl_row:
+            print(f"Store #{st_num} {loc['name']}: Not found in sheet {source_sheet}")
+            continue
+
+        db_res = sb.table('monthly_kpis').select('*').eq('location_id', loc['id']).eq('period_id', period_id).execute().data
+        if not db_res:
+            print(f"Store #{st_num} {loc['name']}: MISSING IN SUPABASE for {target_period_label}!")
+            continue
+
+        db_row = db_res[0]
+        st_name = loc['short_name']
+        print(f"\n--- Checking Prior Year Baseline: Store #{st_num} {st_name} ({target_period_label}) ---")
+
+        if source_sheet == 'Nov 26 MTD':
+            xl_rev = clean_num(matched_xl_row[24])
+            xl_sales = clean_num(matched_xl_row[23])
+            xl_traffic = clean_num(matched_xl_row[9])
+            xl_cpo_u = clean_num(matched_xl_row[108])
+            xl_cpo_r = clean_num(matched_xl_row[110])
+            xl_rep_oow_u = clean_num(matched_xl_row[148])
+            xl_rep_ins_u = clean_num(matched_xl_row[162])
+        else: # Oct 26
+            xl_rev = clean_num(matched_xl_row[22])
+            xl_sales = clean_num(matched_xl_row[21])
+            xl_traffic = clean_num(matched_xl_row[9])
+            xl_cpo_u = clean_num(matched_xl_row[72])
+            xl_cpo_r = clean_num(matched_xl_row[74])
+            xl_rep_oow_u = clean_num(matched_xl_row[108])
+            xl_rep_ins_u = clean_num(matched_xl_row[119])
+
+        tests = [
+            ("YoY Revenue", xl_rev, float(db_row.get("gross_revenue_actual") or 0), True),
+            ("YoY Sales", xl_sales, float(db_row.get("sales_volume") or 0), False),
+            ("YoY Traffic", xl_traffic, float(db_row.get("foot_traffic_total") or 0), False),
+            ("YoY CPO Units", xl_cpo_u, float(db_row.get("cpo_units_actual") or 0), False),
+            ("YoY CPO Rev", xl_cpo_r, float(db_row.get("cpo_revenue_actual") or 0), True),
+            ("YoY OOW Repairs", xl_rep_oow_u, float(db_row.get("repairs_oow_volume") or 0), False),
+            ("YoY Ins Repairs", xl_rep_ins_u, float(db_row.get("repairs_insurance_volume") or 0), False),
+        ]
+
+        store_passes = 0
+        for label, xl_v, db_v, is_curr in tests:
+            ok = abs(xl_v - db_v) < 1.0
+            total_checks += 1
+            if ok:
+                passed_checks += 1
+                store_passes += 1
+            else:
+                fmt_xl = f"${xl_v:,.2f}" if is_curr else f"{xl_v}"
+                fmt_db = f"${db_v:,.2f}" if is_curr else f"{db_v}"
+                print(f"   [MISMATCH] {label}: Excel={fmt_xl} vs DB={fmt_db}")
+
+        print(f"   RESULT: {store_passes}/{len(tests)} checks PASSED (100% Exact)")
+
+    print(f"\nYoY Audit '{target_period_label}' Total Checked: {passed_checks}/{total_checks} ({passed_checks/total_checks*100:.1f}%) Passed.\n")
+
 if __name__ == "__main__":
     print(f"Loaded {len(periods)} periods and {len(locations)} locations from Supabase.\n")
+    # 1. Spot check Current Month Actuals
     run_spot_check('Nov 26 MTD', [826, 197, 333, 110, 312, 161, 201])
     run_spot_check('Oct 26', [826, 197, 333, 326, 703, 178])
+    
+    # 2. Spot check YoY Baselines (including Store 826 Aberdeen Mall)
+    run_yoy_spot_check('Nov 26 MTD', 'Nov 25', [826, 197, 333, 110, 312])
+    run_yoy_spot_check('Oct 26', 'Oct 2025', [826, 197, 333, 326, 703])

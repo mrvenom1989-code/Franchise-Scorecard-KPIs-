@@ -359,6 +359,11 @@ This document records architectural insights, data anomalies, API quirks, and te
 *   **The Problem**: Multiple interim snapshots can exist in the accounting system simultaneously (e.g. `Jan 26 MTD` for Jan 1–18 and `Oct 26 MTD` for Oct 1–25). When full finalized months exist (`Jan 26` and `Oct 26`), any date range query or multi-month aggregation will double-count performance metrics unless all interim snapshots are systematically pruned.
 *   **The Solution**: Maintain an explicit list of interim period identifiers to exclude in `routes/dashboard.py` and `routes/api.py`, or filter out records where `label` ends in `MTD` when a finalized period for the same year-month is present.
 
+### Embedded YoY Baseline Ingestion vs Static Ancient Tabs
+*   **The Problem**: When corporate provides a scorecard workbook with historical tabs, the ancient static tabs from the previous year (e.g. `Nov 25`, `Dec 2025`) often only contain an outdated roster (e.g. 28 stores), omitting stores that opened or converted later. However, the current year's sheets (e.g. `Nov 26 MTD`) contain prior-year baseline numbers for all 89 active stores embedded directly in YoY comparison columns (`YoY Total GroRev`, `YoY Sales Vol`, `Traffic Vol YoY`, `YoY CPO Units`, etc.). Relying only on current-period ingestion left 61 stores without prior-year rows in `monthly_kpis`, causing executive YoY velocity cards to display `-- 0%`.
+*   **The Solution**: Always extract embedded YoY columns from current-year sheets (`Sept 26`, `Oct 26`, `Nov 26 MTD`) and upsert them into `monthly_kpis` under the corresponding prior-year periods (`Sept 2025`, `Oct 2025`, `Nov 25`). Validation spot-checks must test both current actuals AND prior-year YoY baseline rows.
+
+
 
 
 

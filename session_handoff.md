@@ -342,4 +342,10 @@ Server runs at `http://127.0.0.1:5001`.
      - 100% exact match across Gross Revenue, Sales Volume, Foot Traffic, Activations (New + Migrations), CPO Units/Revenue, Repairs, and Accessories.
      - `activations_total == activations_new + activations_migrations` holds 100% true across all stores.
 
+7. **Embedded YoY Historical Baseline Recovery (`Nov 25`, `Oct 2025`, `Sept 2025`)**:
+   * **Root Cause of `-- 0%` YoY Card**: The dashboard computes Growth Velocity by querying `monthly_kpis` for the matching prior-year month (`Nov 25`). Because ancient 2025 static sheets only held 28 legacy franchise stores, Aberdeen Mall (#826) and 60 other stores lacked rows in `monthly_kpis` for `Nov 25`. Their 2025 baseline figures were embedded inside the YoY columns of sheet `Nov 26 MTD` ($16,818 Revenue, 63 Sales, 989 Traffic, etc.).
+   * **Resolution**: Built `scripts/ingest_embedded_yoy.py` extracting all 2025 YoY columns across `Sept 26`, `Oct 26`, and `Nov 26 MTD` into `monthly_kpis` (206 total store records).
+   * **Result**: Aberdeen Mall now displays **+$35,017 (+208.2%)** YoY Gross Revenue growth, **+1700%** Activations, **+138.9%** CPO, and **-8.6%** Traffic, matching Excel cells exactly.
+
+
 
