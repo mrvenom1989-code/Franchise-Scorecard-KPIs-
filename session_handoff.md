@@ -367,6 +367,31 @@ Server runs at `http://127.0.0.1:5001`.
 
 4. **Expanded Future Spot-Check Audits**:
    * `scripts/spot_check_nov_data.py` now asserts 10 metrics for prior-year baselines, strictly checking Accessory Volume, Accessory Revenue, and Protection Bundles alongside Revenue, Sales, Traffic, Activations, CPO, and Repairs.
+   * Total 100% pass rate achieved across all current actuals and prior-year baselines.
+
+---
+
+## 14. Current Environment State & Verification Commands
+
+### Database Snapshot (Amjzomlovbuwjneqnumv):
+* **Locations**: 94 active stores (85 original + 9 auto-provisioned in Nov).
+* **Periods**: 25 periods (including `Oct 26` finalized, `Nov 26 MTD`, and full 2025 baseline).
+* **Monthly KPIs**: ~1,200 records with complete 23-month continuity across Revenue, Sales, Traffic, Activations, CPO, Repairs, Accessories, and Bundles.
+
+### Key Operational Scripts:
+* `python scripts/spot_check_nov_data.py`: Full audit across current actuals and YoY baselines (100% match).
+* `python scripts/ingest_embedded_yoy.py`: Extracts and syncs embedded YoY columns from current-year sheets.
+* `python scripts/backfill_2025_accessories.py`: Restores 2025 historical merchandise data from sheet columns.
+* `python ingest_scorecard.py --file <path>`: Standard production ingestion engine.
+
+### Deployment:
+* **Repository**: [https://github.com/mrvenom1989-code/Franchise-Scorecard-KPIs-.git](https://github.com/mrvenom1989-code/Franchise-Scorecard-KPIs-.git)
+* **Production URL**: [https://franchise-scorecard-kp-is-drab.vercel.app/](https://franchise-scorecard-kp-is-drab.vercel.app/)
+* **Latest Commits**:
+  - `cef9580`: Ingest Nov 26 MTD and Oct 26 finalized scorecard with automated store provisioning
+  - `c2c0349`: Ingest embedded 2025 YoY historical baseline for Nov 25, Oct 2025, Sept 2025
+  - `a48d2d4`: Location sorting by # and name, complete 23-month accessories timeline, Tab 5 charts
+
 
 
 

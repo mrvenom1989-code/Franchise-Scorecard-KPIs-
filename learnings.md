@@ -367,6 +367,40 @@ This document records architectural insights, data anomalies, API quirks, and te
 *   **The Problem**: In retail scorecard operations, merchandise accessories and protection bundles operate on different scales: revenue ranges from thousands of dollars, whereas items sold ranges in dozens or hundreds. Single-axis bar charts compress volume bars to invisibility or flatten revenue scales.
 *   **The Solution**: Use a dual-axis (`y` for currency, `y1` for volume) configuration in Chart.js with bar for revenue and line overlay for unit volume. In YoY overlay mode, switch to grouped side-by-side comparative bars (`2025 Prior Year` vs `2026 Current Year`) with dynamic compact currency badges.
 
+---
+
+## 17. Client-Side DOM Sorting for Multi-Select Filters
+
+### Instantaneous Sorting Without State Loss
+*   **The Problem**: In multi-select filter dropdowns with 90+ stores, reloading from the server or re-rendering template strings resets the user's checked boxes and requires asynchronous network overhead.
+*   **The Solution**: Attach sorting attributes (`data-store-num` and `data-store-name`) directly to list item DOM elements (`<label class="store-checkbox-item">`). In `sortStoreCheckboxes(sortBy)`:
+    ```javascript
+    const items = Array.from(container.querySelectorAll(".store-checkbox-item"));
+    items.sort((a, b) => {
+      if (sortBy === "name") {
+        return (a.dataset.storeName || "").localeCompare(b.dataset.storeName || "");
+      }
+      return parseInt(a.dataset.storeNum || 0) - parseInt(b.dataset.storeNum || 0);
+    });
+    items.forEach(el => container.appendChild(el));
+    ```
+    Appending existing DOM nodes in-place rearranges the elements instantly with zero latency, zero round-trips, and zero disruption to active checkbox states.
+
+---
+
+## 18. Continuous Merchandise & Protection Plan Baseline Integrity
+
+### Recovering Omitted Historical Columns from Monthly Scorecards
+*   **The Problem**: Initial ingestion scripts often focus strictly on primary revenue and activation metrics, leaving secondary categories (accessories and protection plans) hardcoded to 0 for historical baseline periods (`Jan 2025`–`Aug 2025`). When executive dashboards later introduce merchandise tabs, users see blank historical charts even though corporate sheets documented those metrics.
+*   **The Solution**: Corporate workbooks preserve prior-year performance in dedicated YoY columns across consecutive monthly sheets:
+    - `Jan 26` → `YoY Accessory Volume` (Col 93), `YoY Accessory Revenue` (Col 94), `YoY Protection Bundle` (Col 100)
+    - `Feb 26` → Col 88, 89, 95
+    - `Mar 26` → Col 86, 87, 93
+    - `April 26` → Col 112, 113, 120
+    - `May 26` – `Aug 26` → Col 113, 114, 121
+    By running a deterministic backfill script (`scripts/backfill_2025_accessories.py`), 259 historical records were restored, establishing an unbroken 23-month timeline across all retail product streams.
+
+
 
 
 
